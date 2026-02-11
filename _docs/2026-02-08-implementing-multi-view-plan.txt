@@ -1,0 +1,1042 @@
+
+╭─── Claude Code v2.1.34 ──────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│               Welcome back Professor!              │ started                 │
+│                                                    │ Run /init to create a … │
+│                      ▗ ▗   ▖ ▖                     │ ─────────────────────── │
+│                                                    │ Recent activity         │
+│                        ▘▘ ▝▝                       │ No recent activity      │
+│                                                    │                         │
+│                Opus 4.6 · Claude Pro               │                         │
+│   ~/…/Code/Projects/Visualizer/bonfire-visualizer  │                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Plan to implement                                                            │
+│                                                                              │
+│ Multi-View Visualization — Implementation Plan                               │
+│                                                                              │
+│ Context                                                                      │
+│                                                                              │
+│ The graph page currently only renders WordListView — a text-based sorted     │
+│ list with weight bars. The graph data (GraphData with nodes, edges, weights, │
+│  groups, edge types) supports much richer visualizations. We're adding 3 new │
+│  view modes (word cloud, tree, concentric pie chart) alongside the existing  │
+│ list, selectable via a dropdown. All built with pure SVG + React — no new    │
+│ libraries needed.                                                            │
+│                                                                              │
+│ Shared contract                                                              │
+│                                                                              │
+│ Every view receives the same props and reuses the same utilities:            │
+│ type ViewProps = { graph: GraphData; filter: string[] }                      │
+│ - computeNodeWeights(graph, filter) for sizing                               │
+│ - useGraphInteraction() for selection/highlight state                        │
+│ - getNeighborIds(graph, nodeId) for click handling                           │
+│ - Group colors: actor=blue, activity=amber, tag=emerald                      │
+│                                                                              │
+│ Files to create (4)                                                          │
+│                                                                              │
+│ 1. components/visualization/ViewSwitcher.tsx                                 │
+│                                                                              │
+│ - Dropdown <select> in top-left: List, Word Cloud, Tree, Pie Chart           │
+│ - State: viewMode: "list" | "cloud" | "tree" | "pie"                         │
+│ - Styled to match existing FilterBar aesthetic                               │
+│                                                                              │
+│ 2. components/visualization/WordCloudView.tsx                                │
+│                                                                              │
+│ - SVG-based word cloud                                                       │
+│ - Each node rendered as <text> element                                       │
+│ - Font size scaled by weight (min 12px, max 48px based on weight/maxWeight)  │
+│ - Color by group (actor=blue, activity=amber, tag=emerald)                   │
+│ - Simple spiral/grid placement algorithm (no overlap detection needed for    │
+│ MVP — use deterministic grid positions based on sorted index)                │
+│ - Click → selectNode + setHighlights (same pattern as WordListView)          │
+│ - Selected node: bold + ring. Neighbor nodes: increased opacity. Others:     │
+│ dimmed when selection active.                                                │
+│                                                                              │
+│ 3. components/visualization/TreeView.tsx                                     │
+│                                                                              │
+│ - SVG-based radial/hierarchical tree                                         │
+│ - Root = highest-weight node (or virtual center)                             │
+│ - Layout: concentric rings by degree of separation from selected node (or by │
+│  group)                                                                      │
+│ - Nodes as circles, sized by weight                                          │
+│ - Edges as lines between connected nodes                                     │
+│ - Uses edge data to draw actual connections                                  │
+│ - Edge type → line style: authored=solid, replies_to=dashed, tagged=dotted   │
+│ - Click interaction same as other views                                      │
+│ - Color by group                                                             │
+│                                                                              │
+│ 4. components/visualization/PieChartView.tsx                                 │
+│                                                                              │
+│ - SVG concentric pie/ring chart                                              │
+│ - Outer ring: all nodes as arc segments, sized by weight, colored by group   │
+│ - Inner rings: group summary arcs (one per group)                            │
+│ - Center: selected node label (if any)                                       │
+│ - Click on arc → select that node                                            │
+│ - Highlighted neighbors get elevated opacity/stroke                          │
+│ - Uses <path> with arc calculations (d3-style arc math inline, no library)   │
+│                                                                              │
+│ Files to modify (2)                                                          │
+│                                                                              │
+│ 5. components/visualization/index.ts                                         │
+│                                                                              │
+│ - Export all new components + ViewSwitcher                                   │
+│                                                                              │
+│ 6. app/graph/page.tsx                                                        │
+│                                                                              │
+│ - Add viewMode state                                                         │
+│ - Render <ViewSwitcher> above FilterBar                                      │
+│ - Conditionally render the selected view component                           │
+│                                                                              │
+│ Implementation order                                                         │
+│                                                                              │
+│ 1. ViewSwitcher.tsx                                                          │
+│ 2. WordCloudView.tsx                                                         │
+│ 3. TreeView.tsx                                                              │
+│ 4. PieChartView.tsx                                                          │
+│ 5. Update index.ts exports                                                   │
+│ 6. Update app/graph/page.tsx to wire it all together                         │
+│                                                                              │
+│ Verification                                                                 │
+│                                                                              │
+│ 1. npm run build — no errors                                                 │
+│ 2. npm run lint — passes                                                     │
+│ 3. Each view renders the same data with selection/highlight working          │
+│ 4. Switching views preserves selection state (shared Zustand store)          │
+│ 5. Filters work across all views                                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+⏺ I'll start by reading the existing files to understand the current codebase
+  structure.
+
+⏺ Explore(Explore codebase structure)
+  ⎿  Done (18 tool uses · 29.3k tokens · 52s)
+
+⏺ Now I have a clear picture. Let me implement all the files. The base path is
+  /Users/visions/Documents/Code/Projects/Visualizer/bonfire-visualizer/.
+
+⏺ Write(components/visualization/ViewSwitcher.tsx)
+  ⎿  Wrote 32 lines to components/visualization/ViewSwitcher.tsx
+       1 "use client"
+       2 
+       3 export type ViewMode = "list" | "cloud" | "tree" | "pie"
+       4 
+       5 const OPTIONS: { value: ViewMode; label: string }[] = [
+       6   { value: "list", label: "List" },
+       7   { value: "cloud", label: "Word Cloud" },
+       8   { value: "tree", label: "Tree" },
+       9   { value: "pie", label: "Pie Chart" },
+      10 ]
+     … +22 lines (ctrl+o to expand)
+
+⏺ Write(components/visualization/WordCloudView.tsx)
+  ⎿  Wrote 145 lines to components/visualization/WordCloudView.tsx
+       1 "use client"
+       2 
+       3 import { useMemo } from "react"
+       4 import { GraphData } from "@/lib/graph/types"
+       5 import { computeNodeWeights, WeightedNode } from "@/lib/graph/we
+         ights"
+       6 import { useGraphInteraction } from "@/lib/graph/interactionStor
+         e"
+       7 import { getNeighborIds } from "@/lib/graph/neighbors"
+       8 
+       9 type WordCloudViewProps = {
+      10   graph: GraphData
+     … +135 lines (ctrl+o to expand)
+
+⏺ Write(components/visualization/TreeView.tsx)
+  ⎿  Wrote 244 lines to components/visualization/TreeView.tsx
+       1 "use client"
+       2 
+       3 import { useMemo } from "react"
+       4 import { GraphData } from "@/lib/graph/types"
+       5 import { computeNodeWeights, WeightedNode } from "@/lib/graph/we
+         ights"
+       6 import { useGraphInteraction } from "@/lib/graph/interactionStor
+         e"
+       7 import { getNeighborIds } from "@/lib/graph/neighbors"
+       8 
+       9 type TreeViewProps = {
+      10   graph: GraphData
+     … +234 lines (ctrl+o to expand)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ save pie for later and update exports and graph before running out of     
+  tokens                                                                    
+  ⎿  You've hit your limit · resets 9pm (America/Denver)
+     /upgrade or /extra-usage to finish what you’re working on.
+
+❯ continue 
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(components/visualization/index.ts)
+  ⎿  Added 4 lines
+      1  export { default as WordListView } from "./WordListView"
+      2 +export { default as WordCloudView } from "./WordCloudView"      
+      3 +export { default as TreeView } from "./TreeView"                
+      4  export { default as FilterBar } from "./FilterBar"
+      5 +export { default as ViewSwitcher } from "./ViewSwitcher"        
+      6 +export type { ViewMode } from "./ViewSwitcher"                  
+
+⏺ Now update the graph page.
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(app/graph/page.tsx)
+  ⎿  Added 8 lines, removed 1 line
+       3  import { Suspense, useState, useEffect } from "react"
+       4  import { useRouter, useSearchParams } from "next/navigation"
+       5  import { useBonfireGraph } from "@/lib/hooks/useBonfireGraph"
+       6 -import { WordListView, FilterBar } from "@/components/visualiza
+         -tion"                                                          
+       6 +import {                                                       
+       7 +  WordListView,                                                
+       8 +  WordCloudView,                                               
+       9 +  TreeView,                                                    
+      10 +  FilterBar,                                                   
+      11 +  ViewSwitcher,                                                
+      12 +} from "@/components/visualization"                            
+      13 +import type { ViewMode } from "@/components/visualization"     
+      14  import { SessionQR } from "@/components/qr/SessionQR"
+      15  import { useSessionPolling } from "@/lib/hooks/useSessionPollin
+          g"
+      16  
+
+⏺ Update(app/graph/page.tsx)
+  ⎿  Added 1 line
+      17  function GraphPageInner() {
+      18    const { graph, error, isLoading } = useBonfireGraph()
+      19    const [filter, setFilter] = useState<string[]>([])
+      20 +  const [viewMode, setViewMode] = useState<ViewMode>("list")   
+      21    const router = useRouter()
+      22    const searchParams = useSearchParams()
+      23  
+
+⏺ Update(app/graph/page.tsx)
+  ⎿  Added 7 lines, removed 2 lines
+      76          </p>
+      77        </div>
+      78  
+      79 -      <FilterBar active={filter} onChange={setFilter} />       
+      79 +      <div className="flex items-center gap-4">                
+      80 +        <ViewSwitcher value={viewMode} onChange={setViewMode} /
+         +>                                                              
+      81 +        <FilterBar active={filter} onChange={setFilter} />     
+      82 +      </div>                                                   
+      83  
+      81 -      <WordListView graph={graph} filter={filter} />           
+      84 +      {viewMode === "list" && <WordListView graph={graph} filte
+         +r={filter} />}                                                 
+      85 +      {viewMode === "cloud" && <WordCloudView graph={graph} fil
+         +ter={filter} />}                                               
+      86 +      {viewMode === "tree" && <TreeView graph={graph} filter={f
+         +ilter} />}                                                     
+      87      </div>
+      88    )
+      89  }
+
+⏺ Now let me verify the build.
+
+⏺ Bash(cd /Users/visions/Documents/Code/Projects/Visualizer/bonfire-visualizer
+      && npm run build 2>&1 | tail -30)
+  ⎿  > next build
+
+     ▲ Next.js 16.1.6 (Turbopack)
+     … +26 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+⏺ Build passes cleanly. Let me also run lint.
+
+⏺ Bash(npm run lint 2>&1 | tail -10)
+  ⎿  > bonfire-visualizer@0.1.0 lint
+     > eslint
+
+⏺ Build and lint both pass with no errors.
+
+⏺ All done. Here's a summary of what was completed:
+
+  Created:
+  - ViewSwitcher.tsx — dropdown with List, Word Cloud, Tree, Pie Chart options
+  - WordCloudView.tsx — SVG word cloud with grid layout, font sizing by weight,
+  group colors
+  - TreeView.tsx — SVG radial tree with BFS ring layout, edges with dash styles
+  by type, node circles sized by weight
+
+  Modified:
+  - index.ts — exports all new components + ViewMode type
+  - app/graph/page.tsx — added viewMode state, renders ViewSwitcher alongside
+  FilterBar, conditionally renders the active view
+
+  Deferred: PieChartView (task #4 still pending)
+
+  All three views share the same { graph, filter } props, Zustand interaction
+  store, and click-to-select/highlight pattern. Switching views preserves
+  selection state.
+
+✻ Baked for 42s
+
+❯ keep going 
+
+⏺ Write(components/visualization/PieChartView.tsx)
+  ⎿  Wrote 263 lines to components/visualization/PieChartView.tsx
+       1 "use client"
+       2 
+       3 import { useMemo } from "react"
+       4 import { GraphData, NodeGroup } from "@/lib/graph/types"
+       5 import { computeNodeWeights, WeightedNode } from "@/lib/graph/we
+         ights"
+       6 import { useGraphInteraction } from "@/lib/graph/interactionStor
+         e"
+       7 import { getNeighborIds } from "@/lib/graph/neighbors"
+       8 
+       9 type PieChartViewProps = {
+      10   graph: GraphData
+     … +253 lines (ctrl+o to expand)
+
+⏺ Now update the exports and graph page to include PieChartView.
+
+⏺ Read 2 files (ctrl+o to expand)
+
+⏺ Update(components/visualization/index.ts)
+  ⎿  Added 1 line
+      1  export { default as WordListView } from "./WordListView"
+      2  export { default as WordCloudView } from "./WordCloudView"
+      3  export { default as TreeView } from "./TreeView"
+      4 +export { default as PieChartView } from "./PieChartView"        
+      5  export { default as FilterBar } from "./FilterBar"
+      6  export { default as ViewSwitcher } from "./ViewSwitcher"
+      7  export type { ViewMode } from "./ViewSwitcher"
+
+⏺ Update(app/graph/page.tsx)
+  ⎿  Added 1 line
+       7    WordListView,
+       8    WordCloudView,
+       9    TreeView,
+      10 +  PieChartView,                                                
+      11    FilterBar,
+      12    ViewSwitcher,
+      13  } from "@/components/visualization"
+
+⏺ Update(app/graph/page.tsx)
+  ⎿  Added 1 line
+      85        {viewMode === "list" && <WordListView graph={graph} filte
+          r={filter} />}
+      86        {viewMode === "cloud" && <WordCloudView graph={graph} fil
+          ter={filter} />}
+      87        {viewMode === "tree" && <TreeView graph={graph} filter={f
+          ilter} />}
+      88 +      {viewMode === "pie" && <PieChartView graph={graph} filter
+         +={filter} />}                                                  
+      89      </div>
+      90    )
+      91  }
+
+⏺ Bash(npm run build 2>&1 | tail -20)
+  ⎿    Generating static pages using 7 workers (1/7)
+       Generating static pages using 7 workers (3/7)
+       Generating static pages using 7 workers (5/7)
+     … +16 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+⏺ Build passes. Let me run lint too.
+
+⏺ Bash(npm run lint 2>&1)
+  ⎿  > bonfire-visualizer@0.1.0 lint
+     > eslint
+
+⏺ All done — build and lint pass clean. The full plan is now implemented:
+
+  Created (4 files):
+  - ViewSwitcher.tsx — dropdown selector for List / Word Cloud / Tree / Pie
+  Chart
+  - WordCloudView.tsx — SVG text cloud, font size by weight, group colors, grid
+  layout
+  - TreeView.tsx — SVG radial tree with BFS rings, edge lines
+  (solid/dashed/dotted by type), node circles
+  - PieChartView.tsx — SVG concentric ring chart, outer ring = node arcs sized
+  by weight, inner ring = group summaries, center label for selected node
+
+  Modified (2 files):
+  - index.ts — exports all 4 new components + ViewMode type
+  - app/graph/page.tsx — viewMode state, ViewSwitcher next to FilterBar,
+  conditional rendering of all 4 views
+
+  All views share the same { graph, filter } props, Zustand interaction store,
+  and click-to-select/highlight behavior. Selection state persists when
+  switching views.
+
+✻ Sautéed for 1m 5s
+
+❯ what next? 
+
+⏺ Everything from the plan is implemented and passing build + lint. Some natural
+   next steps:
+
+  - Commit the changes
+  - Test in browser — npm run dev and try switching views, clicking nodes,
+  filtering
+  - Polish — adjust layout/sizing if anything looks off visually
+  - Extend — add hover tooltips, animations, responsive sizing, or keyboard
+  navigation
+
+  What would you like to do?
+
+❯ let's extend after cleaning up and improving the wordcloud. this needs to 
+   be our hero view, and it currently shows unreadable overlapping words.   
+  we need the words to seem distinct, and to have enough structure (via     
+  rings perhaps) for the viewer to be moved and the cloud to repond         
+
+⏺ Entered plan mode
+  Claude is now exploring and designing an implementation approach.
+
+⏺ Read 3 files (ctrl+o to expand)
+
+⏺ Now let me look at the mock data to understand typical node counts and weight
+  distributions.
+
+⏺ Explore(Find mock graph data)
+  ⎿  Done (3 tool uses · 14.0k tokens · 10s)
+
+⏺ Updated plan
+  ⎿  Error writing file
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Updated plan
+  ⎿  /plan to preview
+
+⏺ User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/sunny-petting-pony.md · /plan to edit
+     Word Cloud Overhaul — Hero View
+
+     Context
+
+     The current WordCloudView uses a naive grid layout that produces
+     overlapping, unreadable text. As the hero view, the word cloud needs to
+      feel polished: words must be legible, spatially organized, and respond
+      to user interaction. The cloud should reorganize itself around the
+     selected node.
+
+     Problems to fix
+
+     1. Overlap — fixed cellH=40 ignores font size; large words collide
+     2. No structure — flat grid has no visual hierarchy or grouping
+     3. Static — nothing moves or responds; feels dead
+
+     Design: Concentric ring layout with interactive focus
+
+     Layout algorithm
+
+     - Center: highest-weight node (or selected node when active), rendered
+     largest
+     - Ring 1: next ~5–6 highest-weight nodes, spaced evenly around center
+     - Ring 2+: remaining nodes in descending weight, filling outward
+     - Ring radius increases per ring; arc spacing per ring ensures no
+     overlap
+     - Font size: 14–52px scaled by weight (wider range than current 12–48)
+     - Each word's angular slot accounts for label.length × fontSize to
+     prevent overlap
+     - Words placed horizontally along rings
+
+     Structure via group color clustering
+
+     - Within each ring, nodes sorted by group (actor → activity → tag) so
+     colors cluster
+     - Subtle dashed <circle> guide rings rendered behind words for visual
+     structure
+
+     Interaction: focus-driven reorganization
+
+     - On click: selected node moves to center; its neighbors pull into ring
+      1; everything else pushes outward — the cloud reorganizes around the
+     selection
+     - On deselect (click again): smooth transition back to weight-based
+     default layout
+     - CSS transition on transform for smooth 300ms repositioning
+     - Selected word: bold + subtle glow (SVG <filter> drop-shadow)
+     - Neighbor words: full opacity; others: dimmed to 0.3
+
+     Responsive sizing
+
+     - Square viewBox 0 0 600 600, scales with container
+     - max-h-[600px] preserved
+
+     File to modify
+
+     components/visualization/WordCloudView.tsx
+
+     Full rewrite of layout function; component interface ({ graph, filter 
+     }) unchanged.
+
+     Key implementation details
+
+     layoutRings(nodes, selectedNodeId, graph):
+     - If selectedNodeId: center = selected, ring1 = neighbors by weight,
+     rest fill outward
+     - If no selection: center = highest weight, rings fill by descending
+     weight
+     - For each ring at radius R: available circumference = 2πR; allocate
+     arc per word ≈ label.length × fontSize × 0.6; enforce min gap of 8px
+     - Returns Array<{ node, x, y, fontSize, ring }>
+
+     Rendering:
+     - Faint dashed <circle> per ring as structural guides
+     - <text> with inline style={{ transform, transition }} for animated
+     repositioning
+     - SVG <filter id="glow"> with <feGaussianBlur> + <feComposite> for
+     selected node
+
+     Reused utilities (no changes):
+     - computeNodeWeights() — lib/graph/weights.ts
+     - useGraphInteraction() — lib/graph/interactionStore.ts
+     - getNeighborIds() — lib/graph/neighbors.ts
+
+     Verification
+
+     1. npm run build — no errors
+     2. npm run lint — passes
+     3. Visual: words readable at all sizes, no overlap, group colors
+     cluster within rings
+     4. Click node → cloud reorganizes around it with smooth animation
+     5. Click again → returns to default weight-based layout
+     6. Filter groups → cloud re-layouts with fewer nodes
+
+
+
+⏺ Write(components/visualization/WordCloudView.tsx)
+  ⎿  Added 185 lines, removed 51 lines
+       18    unknown: "#a3a3a3",
+       19  }
+       20  
+       21 -const MIN_FONT = 12                                           
+       22 -const MAX_FONT = 48                                           
+       23 -const SVG_WIDTH = 600                                         
+       24 -const SVG_HEIGHT = 500                                        
+       21 +const GROUP_ORDER: Record<string, number> = {                 
+       22 +  actor: 0,                                                   
+       23 +  activity: 1,                                                
+       24 +  tag: 2,                                                     
+       25 +  unknown: 3,                                                 
+       26 +}                                                             
+       27  
+       26 -function layoutNodes(nodes: WeightedNode[], maxWeight: number)
+          - {                                                            
+       27 -  const cols = Math.ceil(Math.sqrt(nodes.length * 1.5))       
+       28 -  const cellW = SVG_WIDTH / (cols + 1)                        
+       29 -  const cellH = 40                                            
+       28 +const MIN_FONT = 14                                           
+       29 +const MAX_FONT = 52                                           
+       30 +const SVG_SIZE = 600                                          
+       31 +const CENTER = SVG_SIZE / 2                                   
+       32  
+       31 -  return nodes.map((node, i) => {                             
+       32 -    const col = i % cols                                      
+       33 -    const row = Math.floor(i / cols)                          
+       34 -    const fontSize =                                          
+       35 -      maxWeight > 0                                           
+       36 -        ? MIN_FONT + ((node.weight / maxWeight) * (MAX_FONT - 
+          -MIN_FONT))                                                    
+       37 -        : MIN_FONT                                            
+       33 +type LayoutItem = {                                           
+       34 +  node: WeightedNode                                          
+       35 +  x: number                                                   
+       36 +  y: number                                                   
+       37 +  fontSize: number                                            
+       38 +  ring: number                                                
+       39 +}                                                             
+       40  
+       39 -    return {                                                  
+       40 -      node,                                                   
+       41 -      x: cellW * (col + 0.5) + (row % 2 === 1 ? cellW * 0.3 : 
+          -0),                                                           
+       42 -      y: 30 + row * cellH,                                    
+       43 -      fontSize,                                               
+       44 -    }                                                         
+       41 +function getFontSize(weight: number, maxWeight: number): numbe
+          +r {                                                           
+       42 +  if (maxWeight <= 0) return MIN_FONT                         
+       43 +  return MIN_FONT + (weight / maxWeight) * (MAX_FONT - MIN_FON
+          +T)                                                            
+       44 +}                                                             
+       45 +                                                              
+       46 +function estimateTextWidth(label: string, fontSize: number): n
+          +umber {                                                       
+       47 +  return label.length * fontSize * 0.55                       
+       48 +}                                                             
+       49 +                                                              
+       50 +function layoutRings(                                         
+       51 +  weighted: WeightedNode[],                                   
+       52 +  maxWeight: number,                                          
+       53 +  selectedNodeId: string | undefined,                         
+       54 +  graph: GraphData,                                           
+       55 +): { items: LayoutItem[]; ringCount: number } {               
+       56 +  if (weighted.length === 0) return { items: [], ringCount: 0 
+          +}                                                             
+       57 +                                                              
+       58 +  const nodeMap = new Map(weighted.map((n) => [n.id, n]))     
+       59 +                                                              
+       60 +  // Determine center node and ordering                       
+       61 +  let centerNode: WeightedNode                                
+       62 +  let remaining: WeightedNode[]                               
+       63 +                                                              
+       64 +  if (selectedNodeId && nodeMap.has(selectedNodeId)) {        
+       65 +    centerNode = nodeMap.get(selectedNodeId)!                 
+       66 +    const neighborIds = new Set(getNeighborIds(graph, selected
+          +NodeId))                                                      
+       67 +    const neighbors = weighted                                
+       68 +      .filter((n) => n.id !== selectedNodeId && neighborIds.ha
+          +s(n.id))                                                      
+       69 +      .sort((a, b) => b.weight - a.weight)                    
+       70 +    const others = weighted                                   
+       71 +      .filter((n) => n.id !== selectedNodeId && !neighborIds.h
+          +as(n.id))                                                     
+       72 +      .sort((a, b) => b.weight - a.weight)                    
+       73 +    remaining = [...neighbors, ...others]                     
+       74 +  } else {                                                    
+       75 +    centerNode = weighted[0]                                  
+       76 +    remaining = weighted.slice(1)                             
+       77 +  }                                                           
+       78 +                                                              
+       79 +  const items: LayoutItem[] = []                              
+       80 +                                                              
+       81 +  // Place center node                                        
+       82 +  const centerFontSize = getFontSize(centerNode.weight, maxWei
+          +ght)                                                          
+       83 +  items.push({                                                
+       84 +    node: centerNode,                                         
+       85 +    x: CENTER,                                                
+       86 +    y: CENTER,                                                
+       87 +    fontSize: centerFontSize,                                 
+       88 +    ring: 0,                                                  
+       89    })
+       90 +                                                              
+       91 +  if (remaining.length === 0) return { items, ringCount: 0 }  
+       92 +                                                              
+       93 +  // Distribute remaining nodes into rings                    
+       94 +  const MIN_RING_RADIUS = 70                                  
+       95 +  const RING_GAP = 65                                         
+       96 +  let ringIndex = 1                                           
+       97 +  let cursor = 0                                              
+       98 +                                                              
+       99 +  while (cursor < remaining.length) {                         
+      100 +    const radius = MIN_RING_RADIUS + (ringIndex - 1) * RING_GA
+          +P                                                             
+      101 +    const circumference = 2 * Math.PI * radius                
+      102 +    const MIN_ARC_GAP = 12                                    
+      103 +                                                              
+      104 +    // Figure out how many nodes fit on this ring             
+      105 +    let usedArc = 0                                           
+      106 +    const ringNodes: { node: WeightedNode; fontSize: number; a
+          +rcNeeded: number }[] = []                                     
+      107 +                                                              
+      108 +    for (let i = cursor; i < remaining.length; i++) {         
+      109 +      const node = remaining[i]                               
+      110 +      const fontSize = getFontSize(node.weight, maxWeight)    
+      111 +      const textW = estimateTextWidth(node.label, fontSize)   
+      112 +      const arcNeeded = textW + MIN_ARC_GAP                   
+      113 +                                                              
+      114 +      if (usedArc + arcNeeded > circumference && ringNodes.len
+          +gth > 0) break                                                
+      115 +                                                              
+      116 +      ringNodes.push({ node, fontSize, arcNeeded })           
+      117 +      usedArc += arcNeeded                                    
+      118 +    }                                                         
+      119 +                                                              
+      120 +    // Sort within ring by group for color clustering         
+      121 +    ringNodes.sort(                                           
+      122 +      (a, b) =>                                               
+      123 +        (GROUP_ORDER[a.node.group] ?? 3) - (GROUP_ORDER[b.node
+          +.group] ?? 3),                                                
+      124 +    )                                                         
+      125 +                                                              
+      126 +    // Place nodes evenly around the ring                     
+      127 +    const totalArc = ringNodes.reduce((s, r) => s + r.arcNeede
+          +d, 0)                                                         
+      128 +    const extraSpace = Math.max(0, circumference - totalArc)  
+      129 +    const padding = ringNodes.length > 0 ? extraSpace / ringNo
+          +des.length : 0                                                
+      130 +                                                              
+      131 +    let angle = -Math.PI / 2                                  
+      132 +    for (const { node, fontSize, arcNeeded } of ringNodes) {  
+      133 +      const halfArc = (arcNeeded + padding) / 2               
+      134 +      const midAngle = angle + halfArc / radius               
+      135 +                                                              
+      136 +      items.push({                                            
+      137 +        node,                                                 
+      138 +        x: CENTER + radius * Math.cos(midAngle),              
+      139 +        y: CENTER + radius * Math.sin(midAngle),              
+      140 +        fontSize,                                             
+      141 +        ring: ringIndex,                                      
+      142 +      })                                                      
+      143 +                                                              
+      144 +      angle = midAngle + halfArc / radius                     
+      145 +    }                                                         
+      146 +                                                              
+      147 +    cursor += ringNodes.length                                
+      148 +    ringIndex++                                               
+      149 +  }                                                           
+      150 +                                                              
+      151 +  return { items, ringCount: ringIndex - 1 }                  
+      152  }
+      153  
+      154  export default function WordCloudView({ graph, filter }: WordC
+           loudViewProps) {
+     ...
+      159  
+      160    const maxWeight = weighted[0]?.weight ?? 1
+      161  
+       56 -  const layout = useMemo(                                     
+       57 -    () => layoutNodes(weighted, maxWeight),                   
+       58 -    [weighted, maxWeight],                                    
+       59 -  )                                                           
+       60 -                                                              
+       61 -  const viewHeight = useMemo(() => {                          
+       62 -    if (layout.length === 0) return SVG_HEIGHT                
+       63 -    const maxY = Math.max(...layout.map((l) => l.y))          
+       64 -    return Math.max(SVG_HEIGHT, maxY + 60)                    
+       65 -  }, [layout])                                                
+       66 -                                                              
+      162    const {
+      163      selectedNodeId,
+      164      highlightedNodeIds,
+     ...
+      166      setHighlights,
+      167    } = useGraphInteraction()
+      168  
+      169 +  const { items, ringCount } = useMemo(                       
+      170 +    () => layoutRings(weighted, maxWeight, selectedNodeId, gra
+          +ph),                                                          
+      171 +    [weighted, maxWeight, selectedNodeId, graph],             
+      172 +  )                                                           
+      173 +                                                              
+      174 +  // Ring guide radii                                         
+      175 +  const ringRadii = useMemo(() => {                           
+      176 +    const radii: number[] = []                                
+      177 +    for (let i = 1; i <= ringCount; i++) {                    
+      178 +      radii.push(70 + (i - 1) * 65)                           
+      179 +    }                                                         
+      180 +    return radii                                              
+      181 +  }, [ringCount])                                             
+      182 +                                                              
+      183    function handleClick(node: WeightedNode) {
+      184      if (selectedNodeId === node.id) {
+      185        selectNode(undefined)
+     ...
+      198      )
+      199    }
+      200  
+      201 +  const hasSelection = !!selectedNodeId                       
+      202 +                                                              
+      203    return (
+      204      <svg
+       94 -      viewBox={`0 0 ${SVG_WIDTH} ${viewHeight}`}              
+      205 +      viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}                 
+      206        className="w-full max-h-[600px]"
+      207        role="img"
+      208        aria-label="Word cloud visualization"
+      209      >
+       99 -      {layout.map(({ node, x, y, fontSize }) => {             
+      210 +      {/* Glow filter for selected node */}                   
+      211 +      <defs>                                                  
+      212 +        <filter id="cloud-glow" x="-50%" y="-50%" width="200%"
+          + height="200%">                                               
+      213 +          <feGaussianBlur in="SourceAlpha" stdDeviation="4" re
+          +sult="blur" />                                                
+      214 +          <feFlood floodColor="#171717" floodOpacity="0.15" re
+          +sult="color" />                                               
+      215 +          <feComposite in="color" in2="blur" operator="in" res
+          +ult="shadow" />                                               
+      216 +          <feMerge>                                           
+      217 +            <feMergeNode in="shadow" />                       
+      218 +            <feMergeNode in="SourceGraphic" />                
+      219 +          </feMerge>                                          
+      220 +        </filter>                                             
+      221 +      </defs>                                                 
+      222 +                                                              
+      223 +      {/* Ring guide circles */}                              
+      224 +      {ringRadii.map((r, i) => (                              
+      225 +        <circle                                               
+      226 +          key={`ring-${i}`}                                   
+      227 +          cx={CENTER}                                         
+      228 +          cy={CENTER}                                         
+      229 +          r={r}                                               
+      230 +          fill="none"                                         
+      231 +          stroke="#e5e5e5"                                    
+      232 +          strokeWidth={0.75}                                  
+      233 +          strokeDasharray="4,6"                               
+      234 +          opacity={0.5}                                       
+      235 +        />                                                    
+      236 +      ))}                                                     
+      237 +                                                              
+      238 +      {/* Word labels */}                                     
+      239 +      {items.map(({ node, x, y, fontSize }) => {              
+      240          const isSelected = node.id === selectedNodeId
+      241          const isNeighbor = highlightedNodeIds.includes(node.id
+           )
+      102 -        const hasSelection = !!selectedNodeId                 
+      242  
+      243          const opacity = hasSelection
+      244            ? isSelected
+      245              ? 1
+      246              : isNeighbor
+      247              ? 0.85
+      109 -            : 0.25                                            
+      248 +            : 0.3                                             
+      249            : 0.9
+      250  
+      251          return (
+      252            <text
+      253              key={node.id}
+      115 -            x={x}                                             
+      116 -            y={y}                                             
+      254 +            x={0}                                             
+      255 +            y={0}                                             
+      256              fontSize={fontSize}
+      257              fill={GROUP_FILL[node.group] ?? GROUP_FILL.unknown
+           }
+      119 -            opacity={opacity}                                 
+      258              fontWeight={isSelected ? 700 : 400}
+      259              textAnchor="middle"
+      260              dominantBaseline="central"
+      123 -            className="cursor-pointer select-none transition-o
+          -pacity"                                                       
+      261 +            className="cursor-pointer select-none"            
+      262 +            style={{                                          
+      263 +              transform: `translate(${x}px, ${y}px)`,         
+      264 +              transition: "transform 300ms ease-out, opacity 2
+          +00ms ease",                                                   
+      265 +              opacity,                                        
+      266 +              filter: isSelected ? "url(#cloud-glow)" : undefi
+          +ned,                                                          
+      267 +            }}                                                
+      268              onClick={() => handleClick(node)}
+      269              role="button"
+      270              aria-label={`${node.label} (${node.group}, weight 
+           ${node.weight})`}
+      271            >
+      128 -            {isSelected && (                                  
+      129 -              <tspan                                          
+      130 -                stroke={GROUP_FILL[node.group] ?? GROUP_FILL.u
+          -nknown}                                                       
+      131 -                strokeWidth={3}                               
+      132 -                strokeOpacity={0.3}                           
+      133 -                paintOrder="stroke"                           
+      134 -              >                                               
+      135 -                {node.label}                                  
+      136 -              </tspan>                                        
+      137 -            )}                                                
+      138 -            {!isSelected && node.label}                       
+      272 +            {node.label}                                      
+      273            </text>
+      274          )
+      275        })}
+
+⏺ Bash(npm run build 2>&1 | tail -20)
+  ⎿    Generating static pages using 7 workers (1/7)
+       Generating static pages using 7 workers (3/7)
+       Generating static pages using 7 workers (5/7)
+     … +16 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+⏺ Bash(npm run lint 2>&1)
+  ⎿  > bonfire-visualizer@0.1.0 lint
+     > eslint
+
+⏺ Build and lint both pass. Here's what changed in the WordCloudView:
+
+  Layout — Replaced flat grid with concentric ring placement. Highest-weight
+  node sits at center; remaining nodes fill outward rings, with each ring sized
+  to fit words without overlap (arc allocation based on label.length × 
+  fontSize).
+
+  Structure — Subtle dashed guide circles behind the words. Within each ring,
+  nodes are sorted by group so colors cluster together (blue actors, amber
+  activities, green tags).
+
+  Interaction — Clicking a node reorganizes the cloud: the selected node moves
+  to center, its neighbors pull into ring 1, everything else pushes outward. All
+   repositioning animates via CSS transition: transform 300ms. Selected node
+  gets a glow filter. Clicking again deselects and returns to the default
+  weight-based layout.
+
+✻ Churned for 2m 21s
+
+❯ wordcloud is better, but needs a variable in the display to be slowly     
+  changing to give views a larger view of the relative graph, this should   
+  be able to be turned off from the remote controller, the link to which    
+  currently returns a 404 error.                                            
+
+⏺ Entered plan mode
+  Claude is now exploring and designing an implementation approach.
+
+⏺ Explore(Explore remote controller setup)
+  ⎿  Done (29 tool uses · 30.9k tokens · 1m 4s)
+
+⏺ Good, I have the full picture now. Let me clarify one thing about the
+  animation before planning.
+
+⏺ User answered Claude's questions:
+  ⎿  · What should slowly change in the word cloud? Auto-cycling through 
+     nodes (selecting a new node every few seconds so the cloud reorganizes)
+      or a continuous spatial animation (like slowly rotating the ring 
+     positions)? → Both
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Updated plan
+  ⎿  /plan to preview
+  ⎿ Tool use rejected with user message: fix the remote and save the rest of the
+     plan into a file called nextsteps.md
+  ⎿  You've hit your limit · resets 4am (America/Denver)
+     /upgrade or /extra-usage to finish what you’re working on.
+
+✻ Cogitated for 2m 15s
+
+❯ finishe the plan 
+  ⎿ Tool use rejected with user message: fix the remote and write the rest of 
+    the plan to a file called next-steps.md
+
+⏺ Write(next-steps.md)
+  ⎿  Wrote 61 lines to next-steps.md
+       1 # Word Cloud Auto-Play — Next Steps
+       2 
+       3 ## Context
+       4 The word cloud reorganizes on click but is otherwise static. For
+          a hero view shown to an audience, the cloud should continuously
+          animate — auto-cycling through nodes AND gently rotating rings 
+         — so viewers passively see the full graph over time. This auto-p
+         lay should be controllable from the remote.
+       5 
+       6 ## 1. Auto-play: node cycling + ring rotation
+       7 
+       8 **In `components/visualization/WordCloudView.tsx`:**
+       9 
+      10 - Add `autoPlay` prop (boolean, default false)
+     … +51 lines (ctrl+o to expand)
+
+⏺ Now let me update the plan file to just the remote fix, which is what we'll
+  implement now.
+
+⏺ Updated plan
+  ⎿  /plan to preview
+
+⏺ User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/sunny-petting-pony.md · /plan to edit
+     Fix Remote Controller 404
+
+     Context
+
+     The remote controller page at /remote/[sessionId] returns a 404. The
+     page code exists and is correct, but Next.js may be failing to render
+     it as a dynamic route. Adding force-dynamic ensures the page is always
+     server-rendered on request rather than attempted at build time.
+
+     Fix
+
+     app/remote/[sessionId]/page.tsx:
+     - Add export const dynamic = 'force-dynamic' at the top of the file
+     (after "use client")
+
+     Verification
+
+     1. npm run build — no errors
+     2. Visit /remote/<any-session-id> — page loads with Remote Controller
+     UI
+
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Wait — "use client" and export const dynamic can't coexist in the same file.
+  The dynamic export is a server-side page config. Let me check how Next.js 16
+  handles this for client pages with dynamic routes.
+
+⏺ Searched for 3 patterns, read 2 files (ctrl+o to expand)
+
+⏺ OK, the file exists. The build output showed it as ƒ /remote/[sessionId]
+  (dynamic) — so it should work. Let me look more carefully at why it 404s. The
+  issue might be that it's a "use client" page that needs a separate layout or
+  there's something else going on.
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Let me test the dev server to see what actually happens when visiting the
+  remote page.
+
+⏺ Bash(npx next build 2>&1 | grep -E "remote|error|Error" | head -20)
+  ⎿  └ ƒ /remote/[sessionId]
+  ⎿  (timeout 2m)
+
+⏺ The route builds fine. The issue with "use client" + use(params) in Next.js 16
+   might be that the params Promise pattern requires the page to be wrapped in
+  Suspense. The use() hook suspends, and without a Suspense boundary, it can
+  cause issues. Let me check how the graph page handles this — it uses Suspense
+  wrapping. The remote page doesn't.
+
+⏺ Update(app/remote/[sessionId]/page.tsx)
+  ⎿  Added 2 lines, removed 2 lines
+      1  "use client"
+      2  
+      3 -import { use, useState, useCallback } from "react"              
+      3 +import { Suspense, use, useState, useCallback } from "react"    
+      4  
+      5  type SessionState = {
+      6    selectedNodeId?: string
+     ...
+      11  
+      12  const ZOOM_LEVELS = ["overview", "cluster", "detail"] as const
+      13  
+      14 -export default function RemotePage({                           
+      14 +function RemotePageInner({                                     
+      15    params,
+      16  }: {
+      17    params: Promise<{ sessionId: string }>
+
+⏺ Now wrap with Suspense at the bottom:
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(app/remote/[sessionId]/page.tsx)
+  ⎿  Added 18 lines
+      171      </div>
+      172    )
+      173  }
+      174 +                                                              
+      175 +export default function RemotePage({                          
+      176 +  params,                                                     
+      177 +}: {                                                          
+      178 +  params: Promise<{ sessionId: string }>                      
+      179 +}) {                                                          
+      180 +  return (                                                    
+      181 +    <Suspense                                                 
+      182 +      fallback={                                              
+      183 +        <div className="min-h-screen bg-neutral-50 dark:bg-neu
+          +tral-950 flex items-center justify-center">                   
+      184 +          <p className="text-neutral-400 text-sm">Loading...</
+          +p>                                                            
+      185 +        </div>                                                
+      186 +      }                                                       
+      187 +    >                                                         
+      188 +      <RemotePageInner params={params} />                     
+      189 +    </Suspense>                                               
+      190 +  )                                                           
+      191 +}                                                             
+
+⏺ Bash(npm run build 2>&1 | tail -20)
+  ⎿    Generating static pages using 7 workers (1/7)
+       Generating static pages using 7 workers (3/7)
+       Generating static pages using 7 workers (5/7)
+     … +16 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+⏺ Bash(npm run lint 2>&1)
+  ⎿  > bonfire-visualizer@0.1.0 lint
+     > eslint
+
+⏺ Build and lint pass. The remote page now wraps use(params) in a Suspense
+  boundary — same pattern as the graph page — which should resolve the 404. The
+  auto-play plan has been saved to next-steps.md for later.
+
+✻ Baked for 1m 41s
