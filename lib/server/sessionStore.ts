@@ -1,6 +1,7 @@
 export type SessionState = {
   selectedNodeId?: string
   zoomState: "overview" | "cluster" | "detail"
+  autoPlay: boolean
   path: string[]
   updatedAt: number
 }
@@ -21,6 +22,7 @@ export function createSession(id: string): SessionState {
   const state: SessionState = {
     selectedNodeId: undefined,
     zoomState: "overview",
+    autoPlay: true,
     path: [],
     updatedAt: Date.now(),
   }
@@ -35,7 +37,7 @@ export function getSession(id: string): SessionState | undefined {
 
 export function patchSession(
   id: string,
-  partial: Partial<Pick<SessionState, "selectedNodeId" | "zoomState">>,
+  partial: Partial<Pick<SessionState, "selectedNodeId" | "zoomState" | "autoPlay">>,
 ): SessionState | undefined {
   let session = sessions.get(id)
   if (!session) return undefined

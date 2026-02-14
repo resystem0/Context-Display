@@ -22,6 +22,7 @@ export function useSessionPolling(sessionId: string | null) {
           applyServerState({
             selectedNodeId: data.selectedNodeId,
             zoomState: data.zoomState,
+            autoPlay: data.autoPlay,
           })
         }
       } catch {

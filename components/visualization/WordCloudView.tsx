@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useEffect, useRef, useState, useCallback } from "react"
 import { GraphData } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
@@ -9,6 +9,7 @@ import { getNeighborIds } from "@/lib/graph/neighbors"
 type WordCloudViewProps = {
   graph: GraphData
   filter: string[]
+  autoPlay?: boolean
 }
 
 const GROUP_FILL: Record<string, string> = {
@@ -29,6 +30,10 @@ const MIN_FONT = 14
 const MAX_FONT = 52
 const SVG_SIZE = 600
 const CENTER = SVG_SIZE / 2
+
+const AUTO_CYCLE_INTERVAL = 5000 // 5 seconds between node changes
+const MANUAL_PAUSE_DURATION = 10000 // 10 seconds pause after manual click
+const ROTATION_SPEED = 0.1 // degrees per frame (~6°/s at 60fps)
 
 type LayoutItem = {
   node: WeightedNode
@@ -52,6 +57,7 @@ function layoutRings(
   maxWeight: number,
   selectedNodeId: string | undefined,
   graph: GraphData,
+  rotationOffset: number = 0,
 ): { items: LayoutItem[]; ringCount: number } {
   if (weighted.length === 0) return { items: [], ringCount: 0 }
 
@@ -89,6 +95,9 @@ function layoutRings(
   })
 
   if (remaining.length === 0) return { items, ringCount: 0 }
+
+  // Convert rotation offset to radians
+  const rotationRad = (rotationOffset * Math.PI) / 180
 
   // Distribute remaining nodes into rings
   const MIN_RING_RADIUS = 70
@@ -128,7 +137,8 @@ function layoutRings(
     const extraSpace = Math.max(0, circumference - totalArc)
     const padding = ringNodes.length > 0 ? extraSpace / ringNodes.length : 0
 
-    let angle = -Math.PI / 2
+    // Start angle includes rotation offset
+    let angle = -Math.PI / 2 + rotationRad
     for (const { node, fontSize, arcNeeded } of ringNodes) {
       const halfArc = (arcNeeded + padding) / 2
       const midAngle = angle + halfArc / radius
@@ -151,7 +161,7 @@ function layoutRings(
   return { items, ringCount: ringIndex - 1 }
 }
 
-export default function WordCloudView({ graph, filter }: WordCloudViewProps) {
+export default function WordCloudView({ graph, filter, autoPlay = false }: WordCloudViewProps) {
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter],
@@ -166,9 +176,72 @@ export default function WordCloudView({ graph, filter }: WordCloudViewProps) {
     setHighlights,
   } = useGraphInteraction()
 
+  // Rotation animation state
+  const [rotationOffset, setRotationOffset] = useState(0)
+  const animationRef = useRef<number | null>(null)
+
+  // Auto-cycle state
+  const [cycleIndex, setCycleIndex] = useState(0)
+  const cycleTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const manualPauseRef = useRef<NodeJS.Timeout | null>(null)
+  const isPausedRef = useRef(false)
+
+  // Auto-cycle through nodes
+  const cycleToNextNode = useCallback(() => {
+    if (weighted.length === 0) return
+    const nextIndex = (cycleIndex + 1) % weighted.length
+    const nextNode = weighted[nextIndex]
+    selectNode(nextNode.id)
+    setHighlights(getNeighborIds(graph, nextNode.id))
+    setCycleIndex(nextIndex)
+  }, [weighted, cycleIndex, selectNode, setHighlights, graph])
+
+  // Ring rotation animation loop
+  useEffect(() => {
+    if (!autoPlay) {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+        animationRef.current = null
+      }
+      return
+    }
+
+    const animate = () => {
+      setRotationOffset((prev) => (prev + ROTATION_SPEED) % 360)
+      animationRef.current = requestAnimationFrame(animate)
+    }
+
+    animationRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current)
+      }
+    }
+  }, [autoPlay])
+
+  // Auto-cycle timer
+  useEffect(() => {
+    if (!autoPlay || isPausedRef.current) {
+      if (cycleTimerRef.current) {
+        clearInterval(cycleTimerRef.current)
+        cycleTimerRef.current = null
+      }
+      return
+    }
+
+    cycleTimerRef.current = setInterval(cycleToNextNode, AUTO_CYCLE_INTERVAL)
+
+    return () => {
+      if (cycleTimerRef.current) {
+        clearInterval(cycleTimerRef.current)
+      }
+    }
+  }, [autoPlay, cycleToNextNode])
+
   const { items, ringCount } = useMemo(
-    () => layoutRings(weighted, maxWeight, selectedNodeId, graph),
-    [weighted, maxWeight, selectedNodeId, graph],
+    () => layoutRings(weighted, maxWeight, selectedNodeId, graph, rotationOffset),
+    [weighted, maxWeight, selectedNodeId, graph, rotationOffset],
   )
 
   // Ring guide radii
@@ -181,14 +254,45 @@ export default function WordCloudView({ graph, filter }: WordCloudViewProps) {
   }, [ringCount])
 
   function handleClick(node: WeightedNode) {
+    // Pause auto-cycle on manual interaction
+    if (autoPlay) {
+      isPausedRef.current = true
+      if (cycleTimerRef.current) {
+        clearInterval(cycleTimerRef.current)
+        cycleTimerRef.current = null
+      }
+      if (manualPauseRef.current) {
+        clearTimeout(manualPauseRef.current)
+      }
+      manualPauseRef.current = setTimeout(() => {
+        isPausedRef.current = false
+      }, MANUAL_PAUSE_DURATION)
+    }
+
     if (selectedNodeId === node.id) {
       selectNode(undefined)
       setHighlights([])
       return
     }
+
+    // Update cycle index to match clicked node
+    const nodeIndex = weighted.findIndex((w) => w.id === node.id)
+    if (nodeIndex >= 0) {
+      setCycleIndex(nodeIndex)
+    }
+
     selectNode(node.id)
     setHighlights(getNeighborIds(graph, node.id))
   }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (manualPauseRef.current) {
+        clearTimeout(manualPauseRef.current)
+      }
+    }
+  }, [])
 
   if (weighted.length === 0) {
     return (
@@ -261,7 +365,7 @@ export default function WordCloudView({ graph, filter }: WordCloudViewProps) {
             className="cursor-pointer select-none"
             style={{
               transform: `translate(${x}px, ${y}px)`,
-              transition: "transform 300ms ease-out, opacity 200ms ease",
+              transition: autoPlay ? "opacity 200ms ease" : "transform 300ms ease-out, opacity 200ms ease",
               opacity,
               filter: isSelected ? "url(#cloud-glow)" : undefined,
             }}

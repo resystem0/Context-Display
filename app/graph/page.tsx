@@ -14,6 +14,7 @@ import {
 import type { ViewMode } from "@/components/visualization"
 import { SessionQR } from "@/components/qr/SessionQR"
 import { useSessionPolling } from "@/lib/hooks/useSessionPolling"
+import { useGraphInteraction } from "@/lib/graph/interactionStore"
 
 function GraphPageInner() {
   const { graph, error, isLoading } = useBonfireGraph()
@@ -21,6 +22,7 @@ function GraphPageInner() {
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const router = useRouter()
   const searchParams = useSearchParams()
+  const autoPlay = useGraphInteraction((s) => s.autoPlay)
 
   const [sessionId] = useState(() => {
     if (typeof window === "undefined") return ""
@@ -74,6 +76,11 @@ function GraphPageInner() {
         </h1>
         <p className="text-sm text-neutral-500 mt-1">
           {graph.nodes.length} nodes &middot; {graph.edges.length} edges
+          {viewMode === "cloud" && (
+            <span className="ml-2">
+              &middot; Auto-Play: {autoPlay ? "ON" : "OFF"}
+            </span>
+          )}
         </p>
       </div>
 
@@ -83,7 +90,7 @@ function GraphPageInner() {
       </div>
 
       {viewMode === "list" && <WordListView graph={graph} filter={filter} />}
-      {viewMode === "cloud" && <WordCloudView graph={graph} filter={filter} />}
+      {viewMode === "cloud" && <WordCloudView graph={graph} filter={filter} autoPlay={autoPlay} />}
       {viewMode === "tree" && <TreeView graph={graph} filter={filter} />}
       {viewMode === "pie" && <PieChartView graph={graph} filter={filter} />}
     </div>
