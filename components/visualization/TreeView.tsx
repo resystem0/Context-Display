@@ -5,17 +5,13 @@ import { GraphData } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
+import { GROUP_FILL } from "@/lib/graph/colors"
+import { TreeSettings, DEFAULT_TREE } from "@/lib/graph/viewSettings"
 
 type TreeViewProps = {
   graph: GraphData
   filter: string[]
-}
-
-const GROUP_FILL: Record<string, string> = {
-  actor: "#3b82f6",
-  activity: "#f59e0b",
-  tag: "#10b981",
-  unknown: "#a3a3a3",
+  settings?: TreeSettings
 }
 
 const EDGE_DASH: Record<string, string> = {
@@ -26,13 +22,13 @@ const EDGE_DASH: Record<string, string> = {
 
 const SVG_SIZE = 550
 const CENTER = SVG_SIZE / 2
-const MIN_RADIUS = 4
-const MAX_RADIUS = 16
 
 function buildRadialLayout(
   weighted: WeightedNode[],
   graph: GraphData,
   selectedNodeId?: string,
+  MIN_RADIUS = 4,
+  MAX_RADIUS = 16,
 ) {
   if (weighted.length === 0) return { positions: new Map<string, { x: number; y: number; r: number }>() }
 
@@ -114,7 +110,8 @@ function buildRadialLayout(
   return { positions }
 }
 
-export default function TreeView({ graph, filter }: TreeViewProps) {
+export default function TreeView({ graph, filter, settings }: TreeViewProps) {
+  const s = settings ?? DEFAULT_TREE
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter],
@@ -128,8 +125,8 @@ export default function TreeView({ graph, filter }: TreeViewProps) {
   } = useGraphInteraction()
 
   const { positions } = useMemo(
-    () => buildRadialLayout(weighted, graph, selectedNodeId),
-    [weighted, graph, selectedNodeId],
+    () => buildRadialLayout(weighted, graph, selectedNodeId, s.minRadius, s.maxRadius),
+    [weighted, graph, selectedNodeId, s.minRadius, s.maxRadius],
   )
 
   const filteredEdges = useMemo(() => {
@@ -221,7 +218,7 @@ export default function TreeView({ graph, filter }: TreeViewProps) {
               stroke={isSelected ? "#171717" : "none"}
               strokeWidth={isSelected ? 2 : 0}
             />
-            {(isSelected || pos.r >= 8) && (
+            {(isSelected || pos.r >= 8) && s.showLabels && (
               <text
                 x={pos.x}
                 y={pos.y + pos.r + 12}

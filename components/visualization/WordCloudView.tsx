@@ -5,35 +5,21 @@ import { GraphData } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
+import { GROUP_FILL, GROUP_ORDER } from "@/lib/graph/colors"
+import { CloudSettings, DEFAULT_CLOUD } from "@/lib/graph/viewSettings"
 
 type WordCloudViewProps = {
   graph: GraphData
   filter: string[]
   autoPlay?: boolean
+  settings?: CloudSettings
 }
 
-const GROUP_FILL: Record<string, string> = {
-  actor: "#3b82f6",
-  activity: "#f59e0b",
-  tag: "#10b981",
-  unknown: "#a3a3a3",
-}
-
-const GROUP_ORDER: Record<string, number> = {
-  actor: 0,
-  activity: 1,
-  tag: 2,
-  unknown: 3,
-}
-
-const MIN_FONT = 14
-const MAX_FONT = 52
+// defaults now in viewSettings.ts
 const SVG_SIZE = 600
 const CENTER = SVG_SIZE / 2
 
-const AUTO_CYCLE_INTERVAL = 5000 // 5 seconds between node changes
 const MANUAL_PAUSE_DURATION = 10000 // 10 seconds pause after manual click
-const ROTATION_SPEED = 0.1 // degrees per frame (~6°/s at 60fps)
 
 type LayoutItem = {
   node: WeightedNode
@@ -43,9 +29,9 @@ type LayoutItem = {
   ring: number
 }
 
-function getFontSize(weight: number, maxWeight: number): number {
-  if (maxWeight <= 0) return MIN_FONT
-  return MIN_FONT + (weight / maxWeight) * (MAX_FONT - MIN_FONT)
+function getFontSize(weight: number, maxWeight: number, minFont: number, maxFont: number): number {
+  if (maxWeight <= 0) return minFont
+  return minFont + (weight / maxWeight) * (maxFont - minFont)
 }
 
 function estimateTextWidth(label: string, fontSize: number): number {
@@ -58,6 +44,8 @@ function layoutRings(
   selectedNodeId: string | undefined,
   graph: GraphData,
   rotationOffset: number = 0,
+  minFont: number = 14,
+  maxFont: number = 52,
 ): { items: LayoutItem[]; ringCount: number } {
   if (weighted.length === 0) return { items: [], ringCount: 0 }
 
@@ -85,7 +73,7 @@ function layoutRings(
   const items: LayoutItem[] = []
 
   // Place center node
-  const centerFontSize = getFontSize(centerNode.weight, maxWeight)
+  const centerFontSize = getFontSize(centerNode.weight, maxWeight, minFont, maxFont)
   items.push({
     node: centerNode,
     x: CENTER,
@@ -116,7 +104,7 @@ function layoutRings(
 
     for (let i = cursor; i < remaining.length; i++) {
       const node = remaining[i]
-      const fontSize = getFontSize(node.weight, maxWeight)
+      const fontSize = getFontSize(node.weight, maxWeight, minFont, maxFont)
       const textW = estimateTextWidth(node.label, fontSize)
       const arcNeeded = textW + MIN_ARC_GAP
 
@@ -161,7 +149,8 @@ function layoutRings(
   return { items, ringCount: ringIndex - 1 }
 }
 
-export default function WordCloudView({ graph, filter, autoPlay = false }: WordCloudViewProps) {
+export default function WordCloudView({ graph, filter, autoPlay = false, settings }: WordCloudViewProps) {
+  const s = settings ?? DEFAULT_CLOUD
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter],
@@ -207,7 +196,7 @@ export default function WordCloudView({ graph, filter, autoPlay = false }: WordC
     }
 
     const animate = () => {
-      setRotationOffset((prev) => (prev + ROTATION_SPEED) % 360)
+      setRotationOffset((prev) => (prev + s.rotationSpeed) % 360)
       animationRef.current = requestAnimationFrame(animate)
     }
 
@@ -218,7 +207,7 @@ export default function WordCloudView({ graph, filter, autoPlay = false }: WordC
         cancelAnimationFrame(animationRef.current)
       }
     }
-  }, [autoPlay])
+  }, [autoPlay, s.rotationSpeed])
 
   // Auto-cycle timer
   useEffect(() => {
@@ -230,18 +219,18 @@ export default function WordCloudView({ graph, filter, autoPlay = false }: WordC
       return
     }
 
-    cycleTimerRef.current = setInterval(cycleToNextNode, AUTO_CYCLE_INTERVAL)
+    cycleTimerRef.current = setInterval(cycleToNextNode, s.cycleInterval)
 
     return () => {
       if (cycleTimerRef.current) {
         clearInterval(cycleTimerRef.current)
       }
     }
-  }, [autoPlay, cycleToNextNode])
+  }, [autoPlay, cycleToNextNode, s.cycleInterval])
 
   const { items, ringCount } = useMemo(
-    () => layoutRings(weighted, maxWeight, selectedNodeId, graph, rotationOffset),
-    [weighted, maxWeight, selectedNodeId, graph, rotationOffset],
+    () => layoutRings(weighted, maxWeight, selectedNodeId, graph, rotationOffset, s.minFont, s.maxFont),
+    [weighted, maxWeight, selectedNodeId, graph, rotationOffset, s.minFont, s.maxFont],
   )
 
   // Ring guide radii

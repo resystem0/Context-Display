@@ -1,10 +1,15 @@
 "use client"
 
-export type ViewMode = "list" | "cloud" | "tree" | "pie"
+export type ViewMode = "list" | "cloud" | "d3cloud" | "animated" | "tree" | "force" | "bubble" | "heatmap" | "pie"
 
 const OPTIONS: { value: ViewMode; label: string }[] = [
   { value: "list", label: "List" },
-  { value: "cloud", label: "Word Cloud" },
+  { value: "cloud", label: "Ring Cloud" },
+  { value: "d3cloud", label: "Word Cloud" },
+  { value: "animated", label: "Animated Cloud" },
+  { value: "force", label: "Force Graph" },
+  { value: "bubble", label: "Bubble Pack" },
+  { value: "heatmap", label: "Heatmap" },
   { value: "tree", label: "Tree" },
   { value: "pie", label: "Pie Chart" },
 ]

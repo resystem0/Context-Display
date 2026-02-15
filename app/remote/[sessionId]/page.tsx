@@ -1,16 +1,67 @@
 "use client"
 
-import { Suspense, use, useState, useCallback, useEffect } from "react"
+import { Suspense, use, useState, useCallback, useEffect, useRef } from "react"
+
+/* ── Types ── */
+
+type GraphNode = {
+  id: string
+  label: string
+  group: string
+  weight?: number
+}
+
+type GraphEdge = {
+  source: string
+  target: string
+}
+
+type GraphData = {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+}
 
 type SessionState = {
   selectedNodeId?: string
-  zoomState: "overview" | "cluster" | "detail"
+  highlightedNodeIds: string[]
+  viewMode: string
+  zoomState: string
   autoPlay: boolean
   path: string[]
   updatedAt: number
 }
 
-const ZOOM_LEVELS = ["overview", "cluster", "detail"] as const
+/* ── View mode options ── */
+
+const VIEW_MODES = [
+  { value: "list", label: "List" },
+  { value: "cloud", label: "Ring Cloud" },
+  { value: "d3cloud", label: "Word Cloud" },
+  { value: "animated", label: "Animated Cloud" },
+  { value: "force", label: "Force Graph" },
+  { value: "bubble", label: "Bubble Pack" },
+  { value: "heatmap", label: "Heatmap" },
+  { value: "tree", label: "Tree" },
+  { value: "pie", label: "Pie Chart" },
+] as const
+
+/* ── Helpers ── */
+
+function getNeighborIds(graph: GraphData, nodeId: string): string[] {
+  const ids = new Set<string>()
+  for (const e of graph.edges) {
+    if (e.source === nodeId) ids.add(e.target)
+    if (e.target === nodeId) ids.add(e.source)
+  }
+  return Array.from(ids)
+}
+
+function getNodeLabel(graph: GraphData, nodeId: string): string {
+  const node = graph.nodes.find((n) => n.id === nodeId)
+  return node?.label ?? nodeId.slice(0, 8)
+}
+
+/* ── Main component ── */
 
 function RemotePageInner({
   params,
@@ -18,11 +69,15 @@ function RemotePageInner({
   params: Promise<{ sessionId: string }>
 }) {
   const { sessionId } = use(params)
-  const [status, setStatus] = useState("")
-  const [neighborIndex, setNeighborIndex] = useState(0)
-  const [lastPathId, setLastPathId] = useState<string | null>(null)
-  const [isAutoPlay, setIsAutoPlay] = useState(true)
 
+  // State
+  const [status, setStatus] = useState("")
+  const [graph, setGraph] = useState<GraphData | null>(null)
+  const [session, setSession] = useState<SessionState | null>(null)
+  const neighborIndexRef = useRef(0)
+  const [lastPathId, setLastPathId] = useState<string | null>(null)
+
+  // ── API helpers ──
   const api = useCallback(
     async (body: Record<string, unknown>) => {
       const res = await fetch(`/api/session/${sessionId}`, {
@@ -30,7 +85,9 @@ function RemotePageInner({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
-      return (await res.json()) as SessionState
+      const state = (await res.json()) as SessionState
+      setSession(state)
+      return state
     },
     [sessionId],
   )
@@ -38,100 +95,108 @@ function RemotePageInner({
   const getState = useCallback(async () => {
     const res = await fetch(`/api/session/${sessionId}`)
     if (!res.ok) return null
-    return (await res.json()) as SessionState
+    const state = (await res.json()) as SessionState
+    setSession(state)
+    return state
   }, [sessionId])
 
-  // Sync auto-play state from server
+  // ── Load graph data once ──
   useEffect(() => {
-    const syncState = async () => {
-      const state = await getState()
-      if (state) {
-        setIsAutoPlay(state.autoPlay)
-      }
+    fetch("/api/bonfire/activities")
+      .then((r) => r.json())
+      .then((g) => setGraph(g))
+      .catch(() => setStatus("Could not load graph"))
+  }, [])
+
+  // ── Poll session state ──
+  useEffect(() => {
+    const poll = async () => {
+      await getState()
     }
-    syncState()
-    const interval = setInterval(syncState, 2000)
+    poll()
+    const interval = setInterval(poll, 2000)
     return () => clearInterval(interval)
   }, [getState])
 
+  // ── Derived values ──
+  const selectedNodeId = session?.selectedNodeId
+  const selectedLabel = selectedNodeId && graph
+    ? getNodeLabel(graph, selectedNodeId)
+    : null
+  const neighborCount = selectedNodeId && graph
+    ? getNeighborIds(graph, selectedNodeId).length
+    : 0
+
+  // ── Actions ──
+
+  const selectNodeWithHighlights = async (nodeId: string) => {
+    if (!graph) return
+    const neighbors = getNeighborIds(graph, nodeId)
+    await api({
+      selectedNodeId: nodeId,
+      highlightedNodeIds: neighbors,
+    })
+    const label = getNodeLabel(graph, nodeId)
+    setStatus(`Selected: ${label}`)
+  }
+
   const toggleAutoPlay = async () => {
-    const newValue = !isAutoPlay
+    const newValue = !(session?.autoPlay ?? true)
     await api({ autoPlay: newValue })
-    setIsAutoPlay(newValue)
     setStatus(`Auto-Play: ${newValue ? "ON" : "OFF"}`)
   }
 
-  const zoomIn = async () => {
-    const state = await getState()
-    if (!state) return
-    const idx = ZOOM_LEVELS.indexOf(state.zoomState)
-    if (idx < ZOOM_LEVELS.length - 1) {
-      await api({ zoomState: ZOOM_LEVELS[idx + 1] })
-      setStatus(`Zoom: ${ZOOM_LEVELS[idx + 1]}`)
-    }
-  }
-
-  const zoomOut = async () => {
-    const state = await getState()
-    if (!state) return
-    const idx = ZOOM_LEVELS.indexOf(state.zoomState)
-    if (idx > 0) {
-      await api({ zoomState: ZOOM_LEVELS[idx - 1] })
-      setStatus(`Zoom: ${ZOOM_LEVELS[idx - 1]}`)
-    }
+  const changeView = async (mode: string) => {
+    await api({ viewMode: mode })
+    const label = VIEW_MODES.find((v) => v.value === mode)?.label ?? mode
+    setStatus(`View: ${label}`)
   }
 
   const clearSelection = async () => {
-    await api({ selectedNodeId: "" })
-    setNeighborIndex(0)
+    await api({ selectedNodeId: "", highlightedNodeIds: [] })
+    neighborIndexRef.current = 0
     setStatus("Selection cleared")
   }
 
+  const randomNode = async () => {
+    if (!graph || graph.nodes.length === 0) {
+      setStatus("No nodes available")
+      return
+    }
+    const idx = Math.floor(Math.random() * graph.nodes.length)
+    const node = graph.nodes[idx]
+    await selectNodeWithHighlights(node.id)
+    neighborIndexRef.current = 0
+  }
+
   const nextNeighbor = async () => {
-    const state = await getState()
-    if (!state?.selectedNodeId) {
-      setStatus("No node selected")
+    if (!graph || !selectedNodeId) {
+      setStatus("Select a node first")
       return
     }
-    // Fetch the graph to get neighbor info
-    const graphRes = await fetch("/api/bonfire/activities")
-    if (!graphRes.ok) {
-      setStatus("Could not load graph")
-      return
-    }
-    const graph = await graphRes.json()
-    const edges = graph.edges ?? []
-    const nodeId = state.selectedNodeId
-    const neighborIds = new Set<string>()
-    for (const e of edges) {
-      if (e.source === nodeId) neighborIds.add(e.target)
-      if (e.target === nodeId) neighborIds.add(e.source)
-    }
-    const neighbors = Array.from(neighborIds)
+    const neighbors = getNeighborIds(graph, selectedNodeId)
     if (neighbors.length === 0) {
       setStatus("No neighbors")
       return
     }
-    const idx = neighborIndex % neighbors.length
-    const next = neighbors[idx]
-    await api({ selectedNodeId: next })
-    setNeighborIndex(idx + 1)
-    setStatus(`Selected: ${next}`)
+    const idx = neighborIndexRef.current % neighbors.length
+    const nextId = neighbors[idx]
+    neighborIndexRef.current = idx + 1
+    await selectNodeWithHighlights(nextId)
   }
 
   const prevNode = async () => {
-    const state = await getState()
-    if (!state || state.path.length < 2) {
+    if (!session || !graph || session.path.length < 2) {
       setStatus("No previous node")
       return
     }
-    const prev = state.path[state.path.length - 2]
-    await api({ selectedNodeId: prev })
-    setStatus(`Back to: ${prev}`)
+    const prevId = session.path[session.path.length - 2]
+    neighborIndexRef.current = 0
+    await selectNodeWithHighlights(prevId)
   }
 
   const savePath = async () => {
-    const state = await getState()
+    const state = session ?? (await getState())
     if (!state || state.path.length === 0) {
       setStatus("No path to save")
       return
@@ -143,7 +208,7 @@ function RemotePageInner({
     })
     const data = await res.json()
     setLastPathId(data.pathId)
-    setStatus("Path saved!")
+    setStatus(`Path saved (${state.path.length} nodes)`)
   }
 
   const exportPath = () => {
@@ -155,50 +220,167 @@ function RemotePageInner({
     setStatus("Exporting...")
   }
 
-  const buttons = [
-    {
-      label: isAutoPlay ? "Auto-Play: ON" : "Auto-Play: OFF",
-      action: toggleAutoPlay,
-      highlight: isAutoPlay,
-    },
-    { label: "Zoom In", action: zoomIn },
-    { label: "Zoom Out", action: zoomOut },
-    { label: "Clear Selection", action: clearSelection },
-    { label: "Next Neighbor", action: nextNeighbor },
-    { label: "Previous Node", action: prevNode },
-    { label: "Save Path", action: savePath },
-    { label: "Export Path", action: exportPath },
-  ]
+  const currentViewLabel =
+    VIEW_MODES.find((v) => v.value === session?.viewMode)?.label ?? "—"
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex flex-col items-center justify-center p-6">
-      <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-6">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex flex-col items-center p-4 pt-6">
+      <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
         Remote Controller
       </h1>
-
-      <div className="grid grid-cols-2 gap-3 w-full max-w-xs">
-        {buttons.map((b) => (
-          <button
-            key={b.label}
-            onClick={b.action}
-            className={`border rounded-lg p-4 text-sm font-medium transition-colors shadow-sm ${
-              "highlight" in b && b.highlight
-                ? "bg-emerald-500 border-emerald-600 text-white active:bg-emerald-600"
-                : "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
-            }`}
-          >
-            {b.label}
-          </button>
-        ))}
-      </div>
-
-      {status && (
-        <p className="mt-4 text-xs text-neutral-500">{status}</p>
-      )}
-
-      <p className="mt-8 text-xs text-neutral-400">
+      <p className="text-xs text-neutral-400 mb-4">
         Session: {sessionId.slice(0, 8)}&hellip;
       </p>
+
+      {/* ── Status bar ── */}
+      <div className="w-full max-w-sm mb-4 rounded-lg bg-neutral-100 dark:bg-neutral-900 p-3 text-center">
+        <p className="text-xs text-neutral-500 mb-1">
+          View: <span className="font-medium text-neutral-700 dark:text-neutral-300">{currentViewLabel}</span>
+        </p>
+        {selectedLabel ? (
+          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200 truncate">
+            🔵 {selectedLabel}
+            <span className="text-xs font-normal text-neutral-500 ml-1">
+              ({neighborCount} neighbors)
+            </span>
+          </p>
+        ) : (
+          <p className="text-sm text-neutral-400">No node selected</p>
+        )}
+      </div>
+
+      {/* ── View Mode Selector ── */}
+      <div className="w-full max-w-sm mb-4">
+        <select
+          value={session?.viewMode ?? "force"}
+          onChange={(e) => changeView(e.target.value)}
+          className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 bg-white text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {VIEW_MODES.map((v) => (
+            <option key={v.value} value={v.value}>
+              {v.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* ── Control Buttons ── */}
+      <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
+        {/* Auto-Play */}
+        <button
+          onClick={toggleAutoPlay}
+          className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm ${
+            session?.autoPlay
+              ? "bg-emerald-500 border border-emerald-600 text-white active:bg-emerald-600"
+              : "bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
+          }`}
+        >
+          {session?.autoPlay ? "⏸ Auto-Play ON" : "▶ Auto-Play OFF"}
+        </button>
+
+        {/* Random Node */}
+        <button
+          onClick={randomNode}
+          className="rounded-lg p-4 text-sm font-medium bg-blue-500 border border-blue-600 text-white active:bg-blue-600 transition-colors shadow-sm"
+        >
+          🎲 Random Node
+        </button>
+
+        {/* Next Neighbor */}
+        <button
+          onClick={nextNeighbor}
+          disabled={!selectedNodeId}
+          className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
+            selectedNodeId
+              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
+              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+          }`}
+        >
+          → Next Neighbor
+        </button>
+
+        {/* Previous Node */}
+        <button
+          onClick={prevNode}
+          disabled={!session || session.path.length < 2}
+          className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
+            session && session.path.length >= 2
+              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
+              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+          }`}
+        >
+          ← Go Back
+        </button>
+
+        {/* Clear Selection */}
+        <button
+          onClick={clearSelection}
+          disabled={!selectedNodeId}
+          className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
+            selectedNodeId
+              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
+              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+          }`}
+        >
+          ✕ Clear
+        </button>
+
+        {/* Save Path */}
+        <button
+          onClick={savePath}
+          disabled={!session || session.path.length === 0}
+          className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
+            session && session.path.length > 0
+              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
+              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+          }`}
+        >
+          💾 Save Path
+        </button>
+
+        {/* Export Path - spans full width */}
+        <button
+          onClick={exportPath}
+          disabled={!lastPathId}
+          className={`col-span-2 rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
+            lastPathId
+              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
+              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+          }`}
+        >
+          📤 Export Path
+        </button>
+      </div>
+
+      {/* ── Status message ── */}
+      {status && (
+        <p className="mt-4 text-xs text-neutral-500 animate-pulse">{status}</p>
+      )}
+
+      {/* ── Path breadcrumb ── */}
+      {session && session.path.length > 0 && graph && (
+        <div className="mt-4 w-full max-w-sm">
+          <p className="text-xs text-neutral-400 mb-1">
+            Path ({session.path.length} nodes):
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {session.path.slice(-8).map((nodeId, i) => (
+              <button
+                key={`${nodeId}-${i}`}
+                onClick={() => selectNodeWithHighlights(nodeId)}
+                className="text-xs px-2 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors truncate max-w-[120px]"
+              >
+                {getNodeLabel(graph, nodeId)}
+              </button>
+            ))}
+            {session.path.length > 8 && (
+              <span className="text-xs text-neutral-400 px-1">
+                +{session.path.length - 8} more
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

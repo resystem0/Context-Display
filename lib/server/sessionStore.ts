@@ -1,10 +1,30 @@
+import {
+  AllViewSettings,
+  DEFAULT_VIEW_SETTINGS,
+} from "@/lib/graph/viewSettings"
+
 export type SessionState = {
   selectedNodeId?: string
+  highlightedNodeIds: string[]
+  viewMode: string
+  viewSettings: AllViewSettings
   zoomState: "overview" | "cluster" | "detail"
   autoPlay: boolean
   path: string[]
   updatedAt: number
 }
+
+export type SessionPatch = Partial<
+  Pick<
+    SessionState,
+    | "selectedNodeId"
+    | "highlightedNodeIds"
+    | "viewMode"
+    | "viewSettings"
+    | "zoomState"
+    | "autoPlay"
+  >
+>
 
 const EXPIRY_MS = 30 * 60 * 1000 // 30 minutes
 
@@ -21,6 +41,9 @@ export function createSession(id: string): SessionState {
   purgeExpired()
   const state: SessionState = {
     selectedNodeId: undefined,
+    highlightedNodeIds: [],
+    viewMode: "force",
+    viewSettings: DEFAULT_VIEW_SETTINGS,
     zoomState: "overview",
     autoPlay: true,
     path: [],
@@ -37,14 +60,34 @@ export function getSession(id: string): SessionState | undefined {
 
 export function patchSession(
   id: string,
-  partial: Partial<Pick<SessionState, "selectedNodeId" | "zoomState" | "autoPlay">>,
+  partial: SessionPatch,
 ): SessionState | undefined {
   let session = sessions.get(id)
   if (!session) return undefined
 
   const prevNodeId = session.selectedNodeId
 
-  session = { ...session, ...partial, updatedAt: Date.now() }
+  // Deep-merge viewSettings (two-level: view → settings within that view)
+  let mergedViewSettings = session.viewSettings
+  if (partial.viewSettings) {
+    mergedViewSettings = { ...session.viewSettings }
+    for (const key of Object.keys(
+      partial.viewSettings,
+    ) as (keyof AllViewSettings)[]) {
+      mergedViewSettings[key] = {
+        ...mergedViewSettings[key],
+        ...partial.viewSettings[key],
+      } as AllViewSettings[typeof key]
+    }
+  }
+
+  const { viewSettings: _vs, ...restPartial } = partial
+  session = {
+    ...session,
+    ...restPartial,
+    viewSettings: mergedViewSettings,
+    updatedAt: Date.now(),
+  }
 
   // Append to path when selectedNodeId changes
   if (

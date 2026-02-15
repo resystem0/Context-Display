@@ -6,10 +6,16 @@ import { useBonfireGraph } from "@/lib/hooks/useBonfireGraph"
 import {
   WordListView,
   WordCloudView,
+  D3CloudView,
+  AnimatedCloudView,
   TreeView,
+  ForceGraphView,
+  BubblePackView,
+  HeatmapView,
   PieChartView,
   FilterBar,
   ViewSwitcher,
+  ViewSettings,
 } from "@/components/visualization"
 import type { ViewMode } from "@/components/visualization"
 import { SessionQR } from "@/components/qr/SessionQR"
@@ -19,10 +25,18 @@ import { useGraphInteraction } from "@/lib/graph/interactionStore"
 function GraphPageInner() {
   const { graph, error, isLoading } = useBonfireGraph()
   const [filter, setFilter] = useState<string[]>([])
-  const [viewMode, setViewMode] = useState<ViewMode>("list")
   const router = useRouter()
   const searchParams = useSearchParams()
   const autoPlay = useGraphInteraction((s) => s.autoPlay)
+  const storeViewMode = useGraphInteraction((s) => s.viewMode)
+  const setStoreViewMode = useGraphInteraction((s) => s.setViewMode)
+  const viewSettings = useGraphInteraction((s) => s.viewSettings)
+  const setViewSettings = useGraphInteraction((s) => s.setViewSettings)
+  const viewMode = storeViewMode as ViewMode
+
+  const handleViewChange = (mode: ViewMode) => {
+    setStoreViewMode(mode)
+  }
 
   const [sessionId] = useState(() => {
     if (typeof window === "undefined") return ""
@@ -76,7 +90,7 @@ function GraphPageInner() {
         </h1>
         <p className="text-sm text-neutral-500 mt-1">
           {graph.nodes.length} nodes &middot; {graph.edges.length} edges
-          {viewMode === "cloud" && (
+          {(viewMode === "cloud" || viewMode === "animated") && (
             <span className="ml-2">
               &middot; Auto-Play: {autoPlay ? "ON" : "OFF"}
             </span>
@@ -85,13 +99,24 @@ function GraphPageInner() {
       </div>
 
       <div className="flex items-center gap-4">
-        <ViewSwitcher value={viewMode} onChange={setViewMode} />
+        <ViewSwitcher value={viewMode} onChange={handleViewChange} />
         <FilterBar active={filter} onChange={setFilter} />
       </div>
 
+      <ViewSettings
+        viewMode={viewMode}
+        values={viewSettings[viewMode as keyof typeof viewSettings] as Record<string, unknown>}
+        onChange={(key, val) => setViewSettings(viewMode, { [key]: val })}
+      />
+
       {viewMode === "list" && <WordListView graph={graph} filter={filter} />}
-      {viewMode === "cloud" && <WordCloudView graph={graph} filter={filter} autoPlay={autoPlay} />}
-      {viewMode === "tree" && <TreeView graph={graph} filter={filter} />}
+      {viewMode === "cloud" && <WordCloudView graph={graph} filter={filter} autoPlay={autoPlay} settings={viewSettings.cloud} />}
+      {viewMode === "d3cloud" && <D3CloudView graph={graph} filter={filter} settings={viewSettings.d3cloud} />}
+      {viewMode === "animated" && <AnimatedCloudView graph={graph} filter={filter} autoPlay={autoPlay} settings={viewSettings.animated} />}
+      {viewMode === "tree" && <TreeView graph={graph} filter={filter} settings={viewSettings.tree} />}
+      {viewMode === "force" && <ForceGraphView graph={graph} filter={filter} settings={viewSettings.force} />}
+      {viewMode === "bubble" && <BubblePackView graph={graph} filter={filter} settings={viewSettings.bubble} />}
+      {viewMode === "heatmap" && <HeatmapView graph={graph} filter={filter} settings={viewSettings.heatmap} />}
       {viewMode === "pie" && <PieChartView graph={graph} filter={filter} />}
     </div>
   )

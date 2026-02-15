@@ -21,8 +21,11 @@ export function useSessionPolling(sessionId: string | null) {
           lastUpdatedAt.current = data.updatedAt
           applyServerState({
             selectedNodeId: data.selectedNodeId,
+            highlightedNodeIds: data.highlightedNodeIds,
             zoomState: data.zoomState,
             autoPlay: data.autoPlay,
+            viewMode: data.viewMode,
+            viewSettings: data.viewSettings,
           })
         }
       } catch {

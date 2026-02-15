@@ -5,17 +5,11 @@ import { GraphData, NodeGroup } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
+import { GROUP_FILL } from "@/lib/graph/colors"
 
 type PieChartViewProps = {
   graph: GraphData
   filter: string[]
-}
-
-const GROUP_FILL: Record<string, string> = {
-  actor: "#3b82f6",
-  activity: "#f59e0b",
-  tag: "#10b981",
-  unknown: "#a3a3a3",
 }
 
 const GROUP_ORDER: NodeGroup[] = ["actor", "activity", "tag"]
