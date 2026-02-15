@@ -45,12 +45,15 @@ export default function ForceGraphView({
   graph,
   filter,
   settings,
+  fills,
 }: {
   graph: GraphData
   filter: string[]
   settings?: ForceSettings
+  fills?: Record<string, string>
 }) {
   const s = settings ?? DEFAULT_FORCE
+  const f = fills ?? GROUP_FILL
   const { selectedNodeId, highlightedNodeIds, selectNode, setHighlights } =
     useGraphInteraction()
 
@@ -246,7 +249,7 @@ export default function ForceGraphView({
 
   if (weighted.length === 0) {
     return (
-      <p className="text-center text-sm text-neutral-500 py-12">
+      <p className="text-center text-sm text-muted py-12">
         No nodes match the current filter.
       </p>
     )
@@ -258,7 +261,7 @@ export default function ForceGraphView({
     <svg
       ref={svgRef}
       viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
-      className="w-full h-auto max-h-[600px]"
+      className="w-full h-auto max-h-[600px] rounded-xl"
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
@@ -278,7 +281,7 @@ export default function ForceGraphView({
             y1={source.y}
             x2={target.x}
             y2={target.y}
-            stroke={isConnected ? "#525252" : "#d4d4d4"}
+            stroke={isConnected ? "#8b5cf6" : "#1e1e24"}
             strokeWidth={isConnected ? 1.5 : 0.75}
             opacity={
               hasSelection ? (isConnected ? 0.8 : 0.15) : 0.5
@@ -308,9 +311,9 @@ export default function ForceGraphView({
               cx={node.x}
               cy={node.y}
               r={node.radius}
-              fill={GROUP_FILL[node.group] ?? GROUP_FILL.unknown}
+              fill={f[node.group] ?? f.unknown ?? "#6b6b80"}
               opacity={opacity}
-              stroke={isSelected ? "#171717" : "none"}
+              stroke={isSelected ? "#8b5cf6" : "none"}
               strokeWidth={isSelected ? 3 : 0}
               onMouseDown={(e) => handleMouseDown(e, node.id)}
             />
@@ -320,7 +323,7 @@ export default function ForceGraphView({
                 y={(node.y ?? 0) + node.radius + 12}
                 textAnchor="middle"
                 fontSize={9}
-                fill="#525252"
+                fill="#6b6b80"
                 opacity={opacity}
                 pointerEvents="none"
               >

@@ -12,18 +12,20 @@ export function SessionQR({ sessionId }: { sessionId: string }) {
       : ""
 
   return (
-    <div className="fixed top-4 right-4 z-50">
+    <div className="relative">
       <button
         onClick={() => setExpanded((e) => !e)}
-        className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg p-2 shadow-md text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
+        className="px-3 py-1.5 text-xs font-medium rounded-lg border border-border bg-surface text-muted hover:text-foreground/80 hover:border-border-bright transition-all duration-200"
       >
         {expanded ? "Hide QR" : "QR Remote"}
       </button>
 
       {expanded && url && (
-        <div className="mt-2 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 shadow-lg">
-          <QRCodeSVG value={url} size={160} />
-          <p className="mt-2 text-xs text-neutral-500 text-center max-w-[160px] break-all">
+        <div className="absolute top-full right-0 mt-2 z-50 glass rounded-xl border border-border p-4 shadow-2xl glow-border">
+          <div className="bg-white rounded-lg p-2">
+            <QRCodeSVG value={url} size={140} />
+          </div>
+          <p className="mt-2 text-[10px] text-muted text-center max-w-[156px] break-all leading-relaxed">
             {url}
           </p>
         </div>

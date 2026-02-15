@@ -21,17 +21,35 @@ export default function ViewSettings({
   if (entries.length === 0) return null
 
   return (
-    <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+    <div className="rounded-xl border border-border overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-muted bg-surface hover:bg-surface-hover transition-colors"
       >
-        <span>⚙ Settings</span>
-        <span className="text-neutral-400">{open ? "▲" : "▼"}</span>
+        <span className="flex items-center gap-2">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          Settings
+        </span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </button>
 
       {open && (
-        <div className="px-3 py-3 space-y-3 bg-white dark:bg-neutral-900">
+        <div className="px-4 py-3 space-y-4 bg-surface/50 border-t border-border">
           {entries.map(([key, def]) => (
             <SettingRow
               key={key}
@@ -61,8 +79,8 @@ function SettingRow({
   if (def.type === "toggle") {
     const checked = (value as boolean) ?? def.default
     return (
-      <label className="flex items-center justify-between cursor-pointer">
-        <span className="text-xs text-neutral-700 dark:text-neutral-300">
+      <label className="flex items-center justify-between cursor-pointer group">
+        <span className="text-xs text-foreground/60 group-hover:text-foreground/80 transition-colors">
           {def.label}
         </span>
         <button
@@ -70,14 +88,14 @@ function SettingRow({
           role="switch"
           aria-checked={checked}
           onClick={() => onChange(settingKey, !checked)}
-          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+          className={`toggle-track relative inline-flex h-5 w-9 items-center rounded-full ${
             checked
-              ? "bg-blue-500"
-              : "bg-neutral-300 dark:bg-neutral-600"
+              ? "bg-accent-purple"
+              : "bg-border-bright"
           }`}
         >
           <span
-            className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+            className={`toggle-thumb inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm ${
               checked ? "translate-x-4.5" : "translate-x-0.5"
             }`}
           />
@@ -90,11 +108,11 @@ function SettingRow({
   const numValue = (value as number) ?? def.default
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-neutral-700 dark:text-neutral-300">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs text-foreground/60">
           {def.label}
         </span>
-        <span className="text-xs font-mono text-neutral-500 tabular-nums">
+        <span className="text-xs font-mono text-accent-purple tabular-nums">
           {def.step < 1 ? numValue.toFixed(2) : numValue}
         </span>
       </div>
@@ -105,7 +123,7 @@ function SettingRow({
         step={def.step}
         value={numValue}
         onChange={(e) => onChange(settingKey, parseFloat(e.target.value))}
-        className="w-full h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full appearance-none cursor-pointer accent-blue-500"
+        className="w-full"
       />
     </div>
   )

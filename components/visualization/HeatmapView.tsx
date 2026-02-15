@@ -5,19 +5,21 @@ import { GraphData } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
-import { GROUP_FILL, GROUP_ORDER } from "@/lib/graph/colors"
+import { GROUP_FILL, GROUP_ORDER, GROUP_LABELS } from "@/lib/graph/colors"
 import { HeatmapSettings, DEFAULT_HEATMAP } from "@/lib/graph/viewSettings"
 
 type HeatmapViewProps = {
   graph: GraphData
   filter: string[]
   settings?: HeatmapSettings
+  fills?: Record<string, string>
 }
 
 const SVG_SIZE = 600
 
-export default function HeatmapView({ graph, filter, settings }: HeatmapViewProps) {
+export default function HeatmapView({ graph, filter, settings, fills }: HeatmapViewProps) {
   const s = settings ?? DEFAULT_HEATMAP
+  const f = fills ?? GROUP_FILL
   const LABEL_MARGIN = s.labelMargin
   const MAX_NODES = s.maxNodes
   const [hoveredCell, setHoveredCell] = useState<{
@@ -87,7 +89,7 @@ export default function HeatmapView({ graph, filter, settings }: HeatmapViewProp
 
   if (weighted.length === 0) {
     return (
-      <p className="text-sm text-neutral-400 py-8 text-center">
+      <p className="text-sm text-muted py-8 text-center">
         No nodes match the current filter.
       </p>
     )
@@ -111,8 +113,7 @@ export default function HeatmapView({ graph, filter, settings }: HeatmapViewProp
         y={LABEL_MARGIN}
         width={gridSize}
         height={gridSize}
-        fill="#fafafa"
-        className="dark:fill-neutral-900"
+        fill="#111114"
       />
 
       {/* Filled cells (only where edges exist) */}
@@ -141,7 +142,7 @@ export default function HeatmapView({ graph, filter, settings }: HeatmapViewProp
               y={LABEL_MARGIN + ri * cellSize}
               width={cellSize}
               height={cellSize}
-              fill={GROUP_FILL[rowNode.group] ?? GROUP_FILL.unknown}
+              fill={f[rowNode.group] ?? f.unknown ?? "#6b6b80"}
               opacity={opacity}
               className="cursor-pointer transition-opacity"
               onMouseEnter={() => setHoveredCell({ row: ri, col: ci })}
@@ -159,7 +160,7 @@ export default function HeatmapView({ graph, filter, settings }: HeatmapViewProp
             y1={boundary}
             x2={SVG_SIZE}
             y2={boundary}
-            stroke="#d4d4d4"
+            stroke="#1e1e24"
             strokeWidth={1}
           />
           <line
@@ -167,7 +168,7 @@ export default function HeatmapView({ graph, filter, settings }: HeatmapViewProp
             y1={LABEL_MARGIN}
             x2={boundary}
             y2={SVG_SIZE}
-            stroke="#d4d4d4"
+            stroke="#1e1e24"
             strokeWidth={1}
           />
         </g>
@@ -185,8 +186,8 @@ export default function HeatmapView({ graph, filter, settings }: HeatmapViewProp
             dominantBaseline="central"
             fontSize={Math.min(cellSize * 0.8, 9)}
             fontWeight={isSelected ? 700 : 400}
-            fill={isSelected ? "#171717" : "#525252"}
-            className="select-none cursor-pointer dark:fill-neutral-300"
+            fill={isSelected ? "#e8e8ed" : "#6b6b80"}
+            className="select-none cursor-pointer"
             onClick={() => handleClick(node)}
           >
             {node.label}
@@ -205,8 +206,8 @@ export default function HeatmapView({ graph, filter, settings }: HeatmapViewProp
             dominantBaseline="central"
             fontSize={Math.min(cellSize * 0.8, 9)}
             fontWeight={isSelected ? 700 : 400}
-            fill={isSelected ? "#171717" : "#525252"}
-            className="select-none cursor-pointer dark:fill-neutral-300"
+            fill={isSelected ? "#e8e8ed" : "#6b6b80"}
+            className="select-none cursor-pointer"
             onClick={() => handleClick(node)}
           >
             {node.label}
@@ -223,8 +224,8 @@ export default function HeatmapView({ graph, filter, settings }: HeatmapViewProp
             y={LABEL_MARGIN + hoveredCell.row * cellSize}
             width={gridSize}
             height={cellSize}
-            fill="#171717"
-            opacity={0.05}
+            fill="#e8e8ed"
+            opacity={0.06}
           />
           {/* Column highlight */}
           <rect
@@ -232,8 +233,8 @@ export default function HeatmapView({ graph, filter, settings }: HeatmapViewProp
             y={LABEL_MARGIN}
             width={cellSize}
             height={gridSize}
-            fill="#171717"
-            opacity={0.05}
+            fill="#e8e8ed"
+            opacity={0.06}
           />
         </g>
       )}

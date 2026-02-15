@@ -5,11 +5,12 @@ import { GraphData, NodeGroup } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
-import { GROUP_FILL } from "@/lib/graph/colors"
+import { GROUP_FILL, GROUP_LABELS } from "@/lib/graph/colors"
 
 type PieChartViewProps = {
   graph: GraphData
   filter: string[]
+  fills?: Record<string, string>
 }
 
 const GROUP_ORDER: NodeGroup[] = ["actor", "activity", "tag"]
@@ -124,7 +125,8 @@ function buildLayout(weighted: WeightedNode[]) {
   return { segments, groupArcs }
 }
 
-export default function PieChartView({ graph, filter }: PieChartViewProps) {
+export default function PieChartView({ graph, filter, fills }: PieChartViewProps) {
+  const f = fills ?? GROUP_FILL
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter],
@@ -154,7 +156,7 @@ export default function PieChartView({ graph, filter }: PieChartViewProps) {
 
   if (weighted.length === 0) {
     return (
-      <p className="text-sm text-neutral-400 py-8 text-center">
+      <p className="text-sm text-muted py-8 text-center">
         No nodes match the current filter.
       </p>
     )
@@ -166,7 +168,7 @@ export default function PieChartView({ graph, filter }: PieChartViewProps) {
   return (
     <svg
       viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
-      className="w-full max-h-[600px]"
+      className="w-full max-h-[600px] rounded-xl"
       role="img"
       aria-label="Pie chart visualization"
     >
@@ -175,9 +177,9 @@ export default function PieChartView({ graph, filter }: PieChartViewProps) {
         <path
           key={`group-${ga.group}`}
           d={arcPath(CENTER, CENTER, INNER_R, INNER_INNER_R, ga.startAngle, ga.endAngle)}
-          fill={GROUP_FILL[ga.group] ?? GROUP_FILL.unknown}
+          fill={f[ga.group] ?? f.unknown ?? "#6b6b80"}
           opacity={0.3}
-          stroke="white"
+          stroke="#111114"
           strokeWidth={1}
         />
       ))}
@@ -199,9 +201,9 @@ export default function PieChartView({ graph, filter }: PieChartViewProps) {
           <path
             key={seg.node.id}
             d={arcPath(CENTER, CENTER, OUTER_R, OUTER_INNER_R, seg.startAngle, seg.endAngle)}
-            fill={GROUP_FILL[seg.node.group] ?? GROUP_FILL.unknown}
+            fill={f[seg.node.group] ?? f.unknown ?? "#6b6b80"}
             opacity={opacity}
-            stroke={isSelected ? "#171717" : "white"}
+            stroke={isSelected ? "#8b5cf6" : "#111114"}
             strokeWidth={isSelected ? 2 : 1}
             className="cursor-pointer transition-opacity"
             onClick={() => handleClick(seg.node)}
@@ -221,8 +223,8 @@ export default function PieChartView({ graph, filter }: PieChartViewProps) {
             dominantBaseline="central"
             fontSize={14}
             fontWeight={600}
-            fill="#171717"
-            className="select-none dark:fill-neutral-100"
+            fill="#e8e8ed"
+            className="select-none"
           >
             {selectedNode.label}
           </text>
@@ -232,10 +234,10 @@ export default function PieChartView({ graph, filter }: PieChartViewProps) {
             textAnchor="middle"
             dominantBaseline="central"
             fontSize={11}
-            fill="#737373"
+            fill="#6b6b80"
             className="select-none"
           >
-            {selectedNode.group} &middot; weight {selectedNode.weight}
+            {GROUP_LABELS[selectedNode.group] ?? selectedNode.group} &middot; weight {selectedNode.weight}
           </text>
         </>
       ) : (
@@ -245,7 +247,7 @@ export default function PieChartView({ graph, filter }: PieChartViewProps) {
           textAnchor="middle"
           dominantBaseline="central"
           fontSize={12}
-          fill="#a3a3a3"
+          fill="#6b6b80"
           className="select-none"
         >
           Click a segment

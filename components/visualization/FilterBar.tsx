@@ -2,10 +2,10 @@
 
 import { NodeGroup } from "@/lib/graph/types"
 
-const GROUPS: { value: NodeGroup; label: string }[] = [
-  { value: "actor", label: "Actors" },
-  { value: "activity", label: "Activities" },
-  { value: "tag", label: "Tags" },
+const GROUPS: { value: NodeGroup; label: string; color: string }[] = [
+  { value: "actor", label: "From", color: "border-indigo-500/50 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20" },
+  { value: "activity", label: "About", color: "border-amber-500/50 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" },
+  { value: "tag", label: "Tags", color: "border-accent-teal/50 bg-accent-teal/10 text-accent-teal hover:bg-accent-teal/20" },
 ]
 
 type FilterBarProps = {
@@ -30,10 +30,10 @@ export default function FilterBar({ active, onChange }: FilterBarProps) {
           <button
             key={g.value}
             onClick={() => toggle(g.value)}
-            className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+            className={`px-3 py-1 text-xs font-medium rounded-full border transition-all duration-200 ${
               isActive
-                ? "bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-neutral-900 dark:border-white"
-                : "bg-white text-neutral-400 border-neutral-200 hover:border-neutral-400 dark:bg-neutral-800 dark:text-neutral-500 dark:border-neutral-700 dark:hover:border-neutral-500"
+                ? g.color
+                : "border-border bg-transparent text-muted hover:border-border-bright hover:text-foreground/60"
             }`}
           >
             {g.label}
@@ -43,7 +43,7 @@ export default function FilterBar({ active, onChange }: FilterBarProps) {
       {active.length > 0 && (
         <button
           onClick={() => onChange([])}
-          className="px-3 py-1.5 text-sm rounded-full border border-neutral-200 text-neutral-500 hover:border-neutral-400 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-500 transition-colors"
+          className="px-3 py-1 text-xs font-medium rounded-full border border-border text-muted hover:border-border-bright hover:text-foreground/60 transition-all duration-200"
         >
           All
         </button>

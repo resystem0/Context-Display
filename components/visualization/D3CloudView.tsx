@@ -5,7 +5,7 @@ import { GraphData } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
-import { GROUP_FILL } from "@/lib/graph/colors"
+import { GROUP_FILL, GROUP_LABELS } from "@/lib/graph/colors"
 import { D3CloudSettings, DEFAULT_D3CLOUD } from "@/lib/graph/viewSettings"
 import d3Cloud from "d3-cloud"
 
@@ -13,6 +13,8 @@ type D3CloudViewProps = {
   graph: GraphData
   filter: string[]
   settings?: D3CloudSettings
+  fills?: Record<string, string>
+  fontFamily?: string
 }
 
 const SVG_SIZE = 600
@@ -32,8 +34,10 @@ type LayoutWord = CloudWord & {
   rotate: number
 }
 
-export default function D3CloudView({ graph, filter, settings }: D3CloudViewProps) {
+export default function D3CloudView({ graph, filter, settings, fills, fontFamily }: D3CloudViewProps) {
   const s = settings ?? DEFAULT_D3CLOUD
+  const f = fills ?? GROUP_FILL
+  const ff = fontFamily ?? "sans-serif"
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter],
@@ -78,7 +82,7 @@ export default function D3CloudView({ graph, filter, settings }: D3CloudViewProp
       .words(cloudInput.map((w) => ({ ...w })))
       .padding(s.wordPadding)
       .spiral("archimedean")
-      .font("sans-serif")
+      .font(ff)
       .fontSize((d) => d.size!)
       .rotate(() => (Math.random() > 0.5 ? 90 : 0))
       .on("end", (words) => {
@@ -100,7 +104,7 @@ export default function D3CloudView({ graph, filter, settings }: D3CloudViewProp
       })
 
     layout.start()
-  }, [cloudInput, s])
+  }, [cloudInput, s, ff])
 
   // Build a lookup from nodeId -> WeightedNode for click handler
   const nodeMap = useMemo(() => {
@@ -125,7 +129,7 @@ export default function D3CloudView({ graph, filter, settings }: D3CloudViewProp
 
   if (weighted.length === 0) {
     return (
-      <p className="text-sm text-neutral-400 py-8 text-center">
+      <p className="text-sm text-muted py-8 text-center">
         No nodes match the current filter.
       </p>
     )
@@ -143,7 +147,7 @@ export default function D3CloudView({ graph, filter, settings }: D3CloudViewProp
       <defs>
         <filter id="d3cloud-glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur" />
-          <feFlood floodColor="#171717" floodOpacity="0.15" result="color" />
+          <feFlood floodColor="#8b5cf6" floodOpacity="0.25" result="color" />
           <feComposite in="color" in2="blur" operator="in" result="shadow" />
           <feMerge>
             <feMergeNode in="shadow" />
@@ -170,9 +174,9 @@ export default function D3CloudView({ graph, filter, settings }: D3CloudViewProp
               key={word.nodeId}
               transform={`translate(${word.x},${word.y}) rotate(${word.rotate})`}
               fontSize={word.size}
-              fill={GROUP_FILL[word.group] ?? GROUP_FILL.unknown}
+              fill={f[word.group] ?? f.unknown ?? "#6b6b80"}
               fontWeight={isSelected ? 700 : 400}
-              fontFamily="sans-serif"
+              fontFamily={ff}
               textAnchor="middle"
               dominantBaseline="central"
               className="cursor-pointer select-none"
@@ -183,7 +187,7 @@ export default function D3CloudView({ graph, filter, settings }: D3CloudViewProp
               }}
               onClick={() => handleClick(word)}
               role="button"
-              aria-label={`${word.text} (${word.group}, weight ${word.weight})`}
+              aria-label={`${word.text} (${GROUP_LABELS[word.group] ?? word.group}, weight ${word.weight})`}
             >
               {word.text}
             </text>

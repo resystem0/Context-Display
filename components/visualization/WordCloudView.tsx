@@ -5,7 +5,7 @@ import { GraphData } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
-import { GROUP_FILL, GROUP_ORDER } from "@/lib/graph/colors"
+import { GROUP_FILL, GROUP_ORDER, GROUP_LABELS } from "@/lib/graph/colors"
 import { CloudSettings, DEFAULT_CLOUD } from "@/lib/graph/viewSettings"
 
 type WordCloudViewProps = {
@@ -13,6 +13,8 @@ type WordCloudViewProps = {
   filter: string[]
   autoPlay?: boolean
   settings?: CloudSettings
+  fills?: Record<string, string>
+  fontFamily?: string
 }
 
 // defaults now in viewSettings.ts
@@ -149,8 +151,10 @@ function layoutRings(
   return { items, ringCount: ringIndex - 1 }
 }
 
-export default function WordCloudView({ graph, filter, autoPlay = false, settings }: WordCloudViewProps) {
+export default function WordCloudView({ graph, filter, autoPlay = false, settings, fills, fontFamily }: WordCloudViewProps) {
   const s = settings ?? DEFAULT_CLOUD
+  const f = fills ?? GROUP_FILL
+  const ff = fontFamily ?? "sans-serif"
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter],
@@ -285,7 +289,7 @@ export default function WordCloudView({ graph, filter, autoPlay = false, setting
 
   if (weighted.length === 0) {
     return (
-      <p className="text-sm text-neutral-400 py-8 text-center">
+      <p className="text-sm text-muted py-8 text-center">
         No nodes match the current filter.
       </p>
     )
@@ -304,7 +308,7 @@ export default function WordCloudView({ graph, filter, autoPlay = false, setting
       <defs>
         <filter id="cloud-glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur" />
-          <feFlood floodColor="#171717" floodOpacity="0.15" result="color" />
+          <feFlood floodColor="#8b5cf6" floodOpacity="0.25" result="color" />
           <feComposite in="color" in2="blur" operator="in" result="shadow" />
           <feMerge>
             <feMergeNode in="shadow" />
@@ -321,7 +325,7 @@ export default function WordCloudView({ graph, filter, autoPlay = false, setting
           cy={CENTER}
           r={r}
           fill="none"
-          stroke="#e5e5e5"
+          stroke="#1e1e24"
           strokeWidth={0.75}
           strokeDasharray="4,6"
           opacity={0.5}
@@ -347,7 +351,8 @@ export default function WordCloudView({ graph, filter, autoPlay = false, setting
             x={0}
             y={0}
             fontSize={fontSize}
-            fill={GROUP_FILL[node.group] ?? GROUP_FILL.unknown}
+            fill={f[node.group] ?? f.unknown ?? "#6b6b80"}
+            fontFamily={ff}
             fontWeight={isSelected ? 700 : 400}
             textAnchor="middle"
             dominantBaseline="central"
@@ -360,7 +365,7 @@ export default function WordCloudView({ graph, filter, autoPlay = false, setting
             }}
             onClick={() => handleClick(node)}
             role="button"
-            aria-label={`${node.label} (${node.group}, weight ${node.weight})`}
+            aria-label={`${node.label} (${GROUP_LABELS[node.group] ?? node.group}, weight ${node.weight})`}
           >
             {node.label}
           </text>

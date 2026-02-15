@@ -12,6 +12,7 @@ type TreeViewProps = {
   graph: GraphData
   filter: string[]
   settings?: TreeSettings
+  fills?: Record<string, string>
 }
 
 const EDGE_DASH: Record<string, string> = {
@@ -110,8 +111,9 @@ function buildRadialLayout(
   return { positions }
 }
 
-export default function TreeView({ graph, filter, settings }: TreeViewProps) {
+export default function TreeView({ graph, filter, settings, fills }: TreeViewProps) {
   const s = settings ?? DEFAULT_TREE
+  const f = fills ?? GROUP_FILL
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter],
@@ -147,7 +149,7 @@ export default function TreeView({ graph, filter, settings }: TreeViewProps) {
 
   if (weighted.length === 0) {
     return (
-      <p className="text-sm text-neutral-400 py-8 text-center">
+      <p className="text-sm text-muted py-8 text-center">
         No nodes match the current filter.
       </p>
     )
@@ -177,7 +179,7 @@ export default function TreeView({ graph, filter, settings }: TreeViewProps) {
             y1={src.y}
             x2={tgt.x}
             y2={tgt.y}
-            stroke={isHighlighted ? "#525252" : "#d4d4d4"}
+            stroke={isHighlighted ? "#8b5cf6" : "#1e1e24"}
             strokeWidth={isHighlighted ? 1.5 : 0.75}
             strokeDasharray={EDGE_DASH[edge.type ?? ""] ?? ""}
             opacity={hasSelection ? (isHighlighted ? 0.8 : 0.15) : 0.4}
@@ -213,9 +215,9 @@ export default function TreeView({ graph, filter, settings }: TreeViewProps) {
               cx={pos.x}
               cy={pos.y}
               r={pos.r}
-              fill={GROUP_FILL[node.group] ?? GROUP_FILL.unknown}
+              fill={f[node.group] ?? f.unknown ?? "#6b6b80"}
               opacity={opacity}
-              stroke={isSelected ? "#171717" : "none"}
+              stroke={isSelected ? "#8b5cf6" : "none"}
               strokeWidth={isSelected ? 2 : 0}
             />
             {(isSelected || pos.r >= 8) && s.showLabels && (
@@ -225,7 +227,7 @@ export default function TreeView({ graph, filter, settings }: TreeViewProps) {
                 textAnchor="middle"
                 fontSize={isSelected ? 11 : 9}
                 fontWeight={isSelected ? 600 : 400}
-                fill="#525252"
+                fill="#6b6b80"
                 opacity={opacity}
                 className="select-none pointer-events-none"
               >

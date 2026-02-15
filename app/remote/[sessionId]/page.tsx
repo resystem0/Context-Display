@@ -1,6 +1,12 @@
 "use client"
 
 import { Suspense, use, useState, useCallback, useEffect, useRef } from "react"
+import {
+  VIEW_SETTING_DEFS,
+  DEFAULT_VIEW_SETTINGS,
+  type AllViewSettings,
+  type SettingDef,
+} from "@/lib/graph/viewSettings"
 
 /* ── Types ── */
 
@@ -25,6 +31,7 @@ type SessionState = {
   selectedNodeId?: string
   highlightedNodeIds: string[]
   viewMode: string
+  viewSettings: AllViewSettings
   zoomState: string
   autoPlay: boolean
   path: string[]
@@ -224,28 +231,28 @@ function RemotePageInner({
     VIEW_MODES.find((v) => v.value === session?.viewMode)?.label ?? "—"
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex flex-col items-center p-4 pt-6">
-      <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+    <div className="min-h-screen bg-background flex flex-col items-center p-4 pt-6">
+      <h1 className="text-lg font-semibold gradient-text mb-1">
         Remote Controller
       </h1>
-      <p className="text-xs text-neutral-400 mb-4">
+      <p className="text-xs text-muted mb-4">
         Session: {sessionId.slice(0, 8)}&hellip;
       </p>
 
       {/* ── Status bar ── */}
-      <div className="w-full max-w-sm mb-4 rounded-lg bg-neutral-100 dark:bg-neutral-900 p-3 text-center">
-        <p className="text-xs text-neutral-500 mb-1">
-          View: <span className="font-medium text-neutral-700 dark:text-neutral-300">{currentViewLabel}</span>
+      <div className="w-full max-w-sm mb-4 rounded-xl bg-surface border border-border p-3 text-center">
+        <p className="text-xs text-muted mb-1">
+          View: <span className="font-medium text-foreground">{currentViewLabel}</span>
         </p>
         {selectedLabel ? (
-          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200 truncate">
+          <p className="text-sm font-medium text-foreground truncate">
             🔵 {selectedLabel}
-            <span className="text-xs font-normal text-neutral-500 ml-1">
+            <span className="text-xs font-normal text-muted ml-1">
               ({neighborCount} neighbors)
             </span>
           </p>
         ) : (
-          <p className="text-sm text-neutral-400">No node selected</p>
+          <p className="text-sm text-muted">No node selected</p>
         )}
       </div>
 
@@ -254,7 +261,7 @@ function RemotePageInner({
         <select
           value={session?.viewMode ?? "force"}
           onChange={(e) => changeView(e.target.value)}
-          className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 bg-white text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-surface text-foreground/80 focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
         >
           {VIEW_MODES.map((v) => (
             <option key={v.value} value={v.value}>
@@ -264,6 +271,20 @@ function RemotePageInner({
         </select>
       </div>
 
+      {/* ── View Settings ── */}
+      <RemoteViewSettings
+        viewMode={session?.viewMode ?? "force"}
+        values={
+          session?.viewSettings?.[
+            (session?.viewMode ?? "force") as keyof AllViewSettings
+          ] as Record<string, unknown> | undefined
+        }
+        onChange={(key, val) => {
+          const vm = session?.viewMode ?? "force"
+          api({ viewSettings: { [vm]: { [key]: val } } })
+        }}
+      />
+
       {/* ── Control Buttons ── */}
       <div className="grid grid-cols-2 gap-3 w-full max-w-sm">
         {/* Auto-Play */}
@@ -271,8 +292,8 @@ function RemotePageInner({
           onClick={toggleAutoPlay}
           className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm ${
             session?.autoPlay
-              ? "bg-emerald-500 border border-emerald-600 text-white active:bg-emerald-600"
-              : "bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
+              ? "bg-accent-teal/20 border border-accent-teal/40 text-accent-teal active:bg-accent-teal/30"
+              : "bg-surface border border-border text-foreground/70 active:bg-surface-hover"
           }`}
         >
           {session?.autoPlay ? "⏸ Auto-Play ON" : "▶ Auto-Play OFF"}
@@ -281,7 +302,7 @@ function RemotePageInner({
         {/* Random Node */}
         <button
           onClick={randomNode}
-          className="rounded-lg p-4 text-sm font-medium bg-blue-500 border border-blue-600 text-white active:bg-blue-600 transition-colors shadow-sm"
+          className="rounded-lg p-4 text-sm font-medium bg-accent-purple/20 border border-accent-purple/40 text-accent-purple active:bg-accent-purple/30 transition-colors shadow-sm"
         >
           🎲 Random Node
         </button>
@@ -292,8 +313,8 @@ function RemotePageInner({
           disabled={!selectedNodeId}
           className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
             selectedNodeId
-              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
-              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+              ? "bg-surface border-border text-foreground/70 hover:bg-surface-hover hover:border-border-bright active:bg-surface-hover"
+              : "bg-surface/50 border-border/50 text-muted/40 cursor-not-allowed"
           }`}
         >
           → Next Neighbor
@@ -305,8 +326,8 @@ function RemotePageInner({
           disabled={!session || session.path.length < 2}
           className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
             session && session.path.length >= 2
-              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
-              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+              ? "bg-surface border-border text-foreground/70 hover:bg-surface-hover hover:border-border-bright active:bg-surface-hover"
+              : "bg-surface/50 border-border/50 text-muted/40 cursor-not-allowed"
           }`}
         >
           ← Go Back
@@ -318,8 +339,8 @@ function RemotePageInner({
           disabled={!selectedNodeId}
           className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
             selectedNodeId
-              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
-              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+              ? "bg-surface border-border text-foreground/70 hover:bg-surface-hover hover:border-border-bright active:bg-surface-hover"
+              : "bg-surface/50 border-border/50 text-muted/40 cursor-not-allowed"
           }`}
         >
           ✕ Clear
@@ -331,8 +352,8 @@ function RemotePageInner({
           disabled={!session || session.path.length === 0}
           className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
             session && session.path.length > 0
-              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
-              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+              ? "bg-surface border-border text-foreground/70 hover:bg-surface-hover hover:border-border-bright active:bg-surface-hover"
+              : "bg-surface/50 border-border/50 text-muted/40 cursor-not-allowed"
           }`}
         >
           💾 Save Path
@@ -344,8 +365,8 @@ function RemotePageInner({
           disabled={!lastPathId}
           className={`col-span-2 rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
             lastPathId
-              ? "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-800 dark:text-neutral-200 active:bg-neutral-100 dark:active:bg-neutral-700"
-              : "bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-400 cursor-not-allowed"
+              ? "bg-surface border-border text-foreground/70 hover:bg-surface-hover hover:border-border-bright active:bg-surface-hover"
+              : "bg-surface/50 border-border/50 text-muted/40 cursor-not-allowed"
           }`}
         >
           📤 Export Path
@@ -354,13 +375,13 @@ function RemotePageInner({
 
       {/* ── Status message ── */}
       {status && (
-        <p className="mt-4 text-xs text-neutral-500 animate-pulse">{status}</p>
+        <p className="mt-4 text-xs text-muted animate-pulse">{status}</p>
       )}
 
       {/* ── Path breadcrumb ── */}
       {session && session.path.length > 0 && graph && (
         <div className="mt-4 w-full max-w-sm">
-          <p className="text-xs text-neutral-400 mb-1">
+          <p className="text-xs text-muted mb-1">
             Path ({session.path.length} nodes):
           </p>
           <div className="flex flex-wrap gap-1">
@@ -368,19 +389,131 @@ function RemotePageInner({
               <button
                 key={`${nodeId}-${i}`}
                 onClick={() => selectNodeWithHighlights(nodeId)}
-                className="text-xs px-2 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors truncate max-w-[120px]"
+                className="text-xs px-2 py-0.5 rounded bg-surface border border-border text-foreground/60 hover:bg-surface-hover hover:border-border-bright transition-colors truncate max-w-[120px]"
               >
                 {getNodeLabel(graph, nodeId)}
               </button>
             ))}
             {session.path.length > 8 && (
-              <span className="text-xs text-neutral-400 px-1">
+              <span className="text-xs text-muted px-1">
                 +{session.path.length - 8} more
               </span>
             )}
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ── Remote View Settings Panel ── */
+
+function RemoteViewSettings({
+  viewMode,
+  values,
+  onChange,
+}: {
+  viewMode: string
+  values: Record<string, unknown> | undefined
+  onChange: (key: string, value: number | boolean) => void
+}) {
+  const defs = VIEW_SETTING_DEFS[viewMode]
+  const entries = defs ? Object.entries(defs) : []
+  const [open, setOpen] = useState(false)
+
+  if (entries.length === 0) return null
+
+  const defaults =
+    DEFAULT_VIEW_SETTINGS[viewMode as keyof AllViewSettings] ?? {}
+  const merged = { ...defaults, ...(values ?? {}) } as Record<string, unknown>
+
+  return (
+    <div className="w-full max-w-sm mb-4 rounded-lg border border-border bg-surface overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted bg-surface hover:bg-surface-hover transition-colors"
+      >
+        <span>⚙ Settings</span>
+        <span className="text-muted">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="px-3 py-3 space-y-3 bg-surface/50 border-t border-border">
+          {entries.map(([key, def]) => (
+            <RemoteSettingRow
+              key={key}
+              settingKey={key}
+              def={def}
+              value={merged[key]}
+              onChange={onChange}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RemoteSettingRow({
+  settingKey,
+  def,
+  value,
+  onChange,
+}: {
+  settingKey: string
+  def: SettingDef
+  value: unknown
+  onChange: (key: string, value: number | boolean) => void
+}) {
+  if (def.type === "toggle") {
+    const checked = (value as boolean) ?? def.default
+    return (
+      <label className="flex items-center justify-between cursor-pointer">
+        <span className="text-xs text-foreground/80">
+          {def.label}
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          onClick={() => onChange(settingKey, !checked)}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+            checked
+              ? "bg-accent-purple"
+              : "bg-border-bright"
+          }`}
+        >
+          <span
+            className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+              checked ? "translate-x-4.5" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+      </label>
+    )
+  }
+
+  // Slider
+  const numValue = (value as number) ?? def.default
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs text-foreground/80">
+          {def.label}
+        </span>
+        <span className="text-xs font-mono text-accent-purple tabular-nums">
+          {def.step < 1 ? numValue.toFixed(2) : numValue}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={def.min}
+        max={def.max}
+        step={def.step}
+        value={numValue}
+        onChange={(e) => onChange(settingKey, parseFloat(e.target.value))}
+        className="w-full h-1.5 bg-border rounded-full appearance-none cursor-pointer accent-accent-purple"
+      />
     </div>
   )
 }
@@ -393,8 +526,8 @@ export default function RemotePage({
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center">
-          <p className="text-neutral-400 text-sm">Loading...</p>
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <p className="text-muted text-sm">Loading...</p>
         </div>
       }
     >

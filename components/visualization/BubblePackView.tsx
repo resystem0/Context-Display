@@ -5,7 +5,7 @@ import { GraphData } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
-import { GROUP_FILL } from "@/lib/graph/colors"
+import { GROUP_FILL, GROUP_LABELS } from "@/lib/graph/colors"
 import { BubbleSettings, DEFAULT_BUBBLE } from "@/lib/graph/viewSettings"
 import { hierarchy, pack } from "d3-hierarchy"
 
@@ -13,6 +13,7 @@ type BubblePackViewProps = {
   graph: GraphData
   filter: string[]
   settings?: BubbleSettings
+  fills?: Record<string, string>
 }
 
 type HierarchyData = {
@@ -30,8 +31,9 @@ function truncateLabel(label: string, maxLen: number): string {
   return label.slice(0, maxLen - 1) + "\u2026"
 }
 
-export default function BubblePackView({ graph, filter, settings }: BubblePackViewProps) {
+export default function BubblePackView({ graph, filter, settings, fills }: BubblePackViewProps) {
   const s = settings ?? DEFAULT_BUBBLE
+  const f = fills ?? GROUP_FILL
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter],
@@ -87,7 +89,7 @@ export default function BubblePackView({ graph, filter, settings }: BubblePackVi
 
   if (weighted.length === 0) {
     return (
-      <p className="text-sm text-neutral-400 py-8 text-center">
+      <p className="text-sm text-muted py-8 text-center">
         No nodes match the current filter.
       </p>
     )
@@ -125,7 +127,7 @@ export default function BubblePackView({ graph, filter, settings }: BubblePackVi
 
           // Depth 1: group containers
           if (node.depth === 1) {
-            const groupColor = GROUP_FILL[d.group ?? "unknown"] ?? GROUP_FILL.unknown
+            const groupColor = f[d.group ?? "unknown"] ?? f.unknown ?? "#6b6b80"
             const groupOpacity = hasSelection && !activeGroups.has(d.group ?? "")
               ? 0.08
               : 0.1
@@ -154,7 +156,7 @@ export default function BubblePackView({ graph, filter, settings }: BubblePackVi
                   opacity={hasSelection && !activeGroups.has(d.group ?? "") ? 0.2 : 0.6}
                   className="select-none pointer-events-none"
                 >
-                  {d.label}
+                  {GROUP_LABELS[d.group ?? "unknown"] ?? d.label}
                 </text>}
               </g>
             )
@@ -163,7 +165,7 @@ export default function BubblePackView({ graph, filter, settings }: BubblePackVi
           // Depth 2: leaf nodes
           const isSelected = d.id === selectedNodeId
           const isNeighbor = highlightSet.has(d.id)
-          const fillColor = GROUP_FILL[d.group ?? "unknown"] ?? GROUP_FILL.unknown
+          const fillColor = f[d.group ?? "unknown"] ?? f.unknown ?? "#6b6b80"
 
           const opacity = hasSelection
             ? isSelected
@@ -179,7 +181,7 @@ export default function BubblePackView({ graph, filter, settings }: BubblePackVi
               onClick={() => handleClick(d)}
               className="cursor-pointer"
               role="button"
-              aria-label={`${d.label} (${d.group}, weight ${d.weight})`}
+              aria-label={`${d.label} (${GROUP_LABELS[d.group ?? "unknown"] ?? d.group}, weight ${d.weight})`}
             >
               <circle
                 cx={node.x}
@@ -187,7 +189,7 @@ export default function BubblePackView({ graph, filter, settings }: BubblePackVi
                 r={node.r}
                 fill={fillColor}
                 opacity={opacity}
-                stroke={isSelected ? "#171717" : "none"}
+                stroke={isSelected ? "#8b5cf6" : "none"}
                 strokeWidth={isSelected ? 2.5 : 0}
               />
               {node.r > 20 && (

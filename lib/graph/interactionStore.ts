@@ -1,7 +1,20 @@
 import { create } from "zustand"
 import { AllViewSettings, DEFAULT_VIEW_SETTINGS } from "./viewSettings"
+import type { ColorTheme, CloudFont } from "./colors"
 
 export type ZoomState = "overview" | "cluster" | "detail"
+
+export type PagePrefs = {
+  background: string | null
+  cloudFont: CloudFont
+  colorTheme: ColorTheme
+}
+
+export const DEFAULT_PAGE_PREFS: PagePrefs = {
+  background: null,
+  cloudFont: "sans",
+  colorTheme: "default",
+}
 
 type InteractionState = {
   selectedNodeId?: string
@@ -10,12 +23,14 @@ type InteractionState = {
   autoPlay: boolean
   viewMode: string
   viewSettings: AllViewSettings
+  pagePrefs: PagePrefs
   selectNode: (id?: string) => void
   setHighlights: (ids: string[]) => void
   setZoomState: (z: ZoomState) => void
   setAutoPlay: (v: boolean) => void
   setViewMode: (m: string) => void
   setViewSettings: (viewMode: string, patch: Record<string, unknown>) => void
+  setPagePrefs: (patch: Partial<PagePrefs>) => void
   applyServerState: (state: {
     selectedNodeId?: string
     zoomState: ZoomState
@@ -34,6 +49,7 @@ export const useGraphInteraction = create<InteractionState>((set) => ({
   autoPlay: true,
   viewMode: "force",
   viewSettings: DEFAULT_VIEW_SETTINGS,
+  pagePrefs: DEFAULT_PAGE_PREFS,
 
   selectNode: (id) => set({ selectedNodeId: id }),
   setHighlights: (ids) => set({ highlightedNodeIds: ids }),
@@ -50,6 +66,11 @@ export const useGraphInteraction = create<InteractionState>((set) => ({
           ...patch,
         },
       },
+    })),
+
+  setPagePrefs: (patch) =>
+    set((state) => ({
+      pagePrefs: { ...state.pagePrefs, ...patch },
     })),
 
   applyServerState: (state) =>
@@ -74,6 +95,7 @@ export const useGraphInteraction = create<InteractionState>((set) => ({
       autoPlay: true,
       viewMode: "force",
       viewSettings: DEFAULT_VIEW_SETTINGS,
+      pagePrefs: DEFAULT_PAGE_PREFS,
     }),
 }))
 
@@ -81,9 +103,12 @@ function deepMergeSettings(
   base: AllViewSettings,
   incoming: AllViewSettings,
 ): AllViewSettings {
-  const result = { ...base }
-  for (const key of Object.keys(incoming) as (keyof AllViewSettings)[]) {
-    result[key] = { ...base[key], ...incoming[key] } as AllViewSettings[typeof key]
+  const result = { ...base } as Record<string, Record<string, unknown>>
+  for (const key of Object.keys(incoming)) {
+    result[key] = {
+      ...(base[key as keyof AllViewSettings] as Record<string, unknown>),
+      ...(incoming[key as keyof AllViewSettings] as Record<string, unknown>),
+    }
   }
-  return result
+  return result as unknown as AllViewSettings
 }

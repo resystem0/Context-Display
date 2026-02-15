@@ -70,15 +70,14 @@ export function patchSession(
   // Deep-merge viewSettings (two-level: view → settings within that view)
   let mergedViewSettings = session.viewSettings
   if (partial.viewSettings) {
-    mergedViewSettings = { ...session.viewSettings }
-    for (const key of Object.keys(
-      partial.viewSettings,
-    ) as (keyof AllViewSettings)[]) {
-      mergedViewSettings[key] = {
-        ...mergedViewSettings[key],
-        ...partial.viewSettings[key],
-      } as AllViewSettings[typeof key]
+    const base = { ...session.viewSettings } as Record<string, Record<string, unknown>>
+    for (const key of Object.keys(partial.viewSettings)) {
+      base[key] = {
+        ...(session.viewSettings[key as keyof AllViewSettings] as Record<string, unknown>),
+        ...(partial.viewSettings[key as keyof AllViewSettings] as Record<string, unknown>),
+      }
     }
+    mergedViewSettings = base as unknown as AllViewSettings
   }
 
   const { viewSettings: _vs, ...restPartial } = partial

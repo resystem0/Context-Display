@@ -5,7 +5,7 @@ import { GraphData } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
-import { GROUP_FILL } from "@/lib/graph/colors"
+import { GROUP_FILL, GROUP_LABELS } from "@/lib/graph/colors"
 import { AnimatedSettings, DEFAULT_ANIMATED } from "@/lib/graph/viewSettings"
 import d3Cloud from "d3-cloud"
 
@@ -14,6 +14,9 @@ type AnimatedCloudViewProps = {
   filter: string[]
   autoPlay?: boolean
   settings?: AnimatedSettings
+  fills?: Record<string, string>
+  gradients?: Record<string, [string, string]>
+  fontFamily?: string
 }
 
 const SVG_SIZE = 600
@@ -23,12 +26,11 @@ const ENTRANCE_DURATION = 400 // ms for fade-in + scale transition
 
 const MANUAL_PAUSE_DURATION = 10000
 
-// Gradient color pairs: [lighter, darker] per group
-const GRADIENT_COLORS: Record<string, [string, string]> = {
-  actor: ["#3b82f6", "#60a5fa"],
+const DEFAULT_GRADIENTS: Record<string, [string, string]> = {
+  actor: ["#6366f1", "#818cf8"],
   activity: ["#f59e0b", "#fbbf24"],
-  tag: ["#10b981", "#34d399"],
-  unknown: ["#a3a3a3", "#d4d4d4"],
+  tag: ["#22d3a7", "#34d399"],
+  unknown: ["#6b6b80", "#a1a1aa"],
 }
 
 type CloudWord = {
@@ -50,8 +52,14 @@ export default function AnimatedCloudView({
   filter,
   autoPlay = false,
   settings,
+  fills,
+  gradients,
+  fontFamily,
 }: AnimatedCloudViewProps) {
   const s = settings ?? DEFAULT_ANIMATED
+  const f = fills ?? GROUP_FILL
+  const g = gradients ?? DEFAULT_GRADIENTS
+  const ff = fontFamily ?? "sans-serif"
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter],
@@ -105,7 +113,7 @@ export default function AnimatedCloudView({
       .words(cloudInput.map((w) => ({ ...w })))
       .padding(s.wordPadding)
       .spiral("archimedean")
-      .font("sans-serif")
+      .font(ff)
       .fontSize((d) => d.size!)
       .rotate(() => (Math.random() > 0.5 ? 90 : 0))
       .on("end", (words) => {
@@ -131,7 +139,7 @@ export default function AnimatedCloudView({
       })
 
     layout.start()
-  }, [cloudInput, s])
+  }, [cloudInput, s, ff])
 
   // Staggered entrance animation: increment visibleCount one by one
   useEffect(() => {
@@ -232,7 +240,7 @@ export default function AnimatedCloudView({
 
   if (weighted.length === 0) {
     return (
-      <p className="text-sm text-neutral-400 py-8 text-center">
+      <p className="text-sm text-muted py-8 text-center">
         No nodes match the current filter.
       </p>
     )
@@ -258,7 +266,7 @@ export default function AnimatedCloudView({
     >
       <defs>
         {/* Gradient fills per group */}
-        {Object.entries(GRADIENT_COLORS).map(([group, [from, to]]) => (
+        {Object.entries(g).map(([group, [from, to]]) => (
           <linearGradient
             key={group}
             id={`gradient-${group}`}
@@ -281,7 +289,7 @@ export default function AnimatedCloudView({
           height="200%"
         >
           <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur" />
-          <feFlood floodColor="#171717" floodOpacity="0.15" result="color" />
+          <feFlood floodColor="#8b5cf6" floodOpacity="0.25" result="color" />
           <feComposite in="color" in2="blur" operator="in" result="shadow" />
           <feMerge>
             <feMergeNode in="shadow" />
@@ -309,9 +317,9 @@ export default function AnimatedCloudView({
               key={word.nodeId}
               transform={`translate(${word.x},${word.y}) rotate(${word.rotate})`}
               fontSize={word.size}
-              fill={`url(#gradient-${word.group in GRADIENT_COLORS ? word.group : "unknown"})`}
+              fill={`url(#gradient-${word.group in g ? word.group : "unknown"})`}
               fontWeight={isSelected ? 700 : 400}
-              fontFamily="sans-serif"
+              fontFamily={ff}
               textAnchor="middle"
               dominantBaseline="central"
               className="cursor-pointer select-none"
@@ -327,7 +335,7 @@ export default function AnimatedCloudView({
               onMouseEnter={() => setHoveredNodeId(word.nodeId)}
               onMouseLeave={() => setHoveredNodeId(null)}
               role="button"
-              aria-label={`${word.text} (${word.group}, weight ${word.weight})`}
+              aria-label={`${word.text} (${GROUP_LABELS[word.group] ?? word.group}, weight ${word.weight})`}
             >
               {word.text}
             </text>
@@ -347,15 +355,15 @@ export default function AnimatedCloudView({
               height={56}
               rx={6}
               ry={6}
-              fill="rgba(23, 23, 23, 0.92)"
-              stroke="rgba(64, 64, 64, 0.5)"
+              fill="rgba(17, 17, 20, 0.95)"
+              stroke="rgba(30, 30, 36, 0.8)"
               strokeWidth={1}
             />
             <text
               x={0}
               y={-36}
               textAnchor="middle"
-              fill="#ffffff"
+              fill="#e8e8ed"
               fontSize={11}
               fontWeight={700}
               fontFamily="sans-serif"
@@ -366,17 +374,17 @@ export default function AnimatedCloudView({
               x={0}
               y={-22}
               textAnchor="middle"
-              fill="#a3a3a3"
+              fill="#6b6b80"
               fontSize={10}
               fontFamily="sans-serif"
             >
-              {hoveredNode.group}
+              {GROUP_LABELS[hoveredNode.group] ?? hoveredNode.group}
             </text>
             <text
               x={0}
               y={-8}
               textAnchor="middle"
-              fill="#a3a3a3"
+              fill="#6b6b80"
               fontSize={10}
               fontFamily="sans-serif"
             >

@@ -5,20 +5,23 @@ import { GraphData } from "@/lib/graph/types"
 import { computeNodeWeights, WeightedNode } from "@/lib/graph/weights"
 import { useGraphInteraction } from "@/lib/graph/interactionStore"
 import { getNeighborIds } from "@/lib/graph/neighbors"
+import { GROUP_FILL, GROUP_LABELS } from "@/lib/graph/colors"
 
 type WordListViewProps = {
   graph: GraphData
   filter: string[]
+  fills?: Record<string, string>
 }
 
 const GROUP_COLORS: Record<string, string> = {
-  actor: "bg-blue-100 text-blue-800",
-  activity: "bg-amber-100 text-amber-800",
-  tag: "bg-emerald-100 text-emerald-800",
-  unknown: "bg-neutral-100 text-neutral-600",
+  actor: "bg-indigo-500/15 text-indigo-400",
+  activity: "bg-amber-500/15 text-amber-400",
+  tag: "bg-emerald-400/15 text-emerald-400",
+  unknown: "bg-neutral-500/15 text-neutral-500",
 }
 
-export default function WordListView({ graph, filter }: WordListViewProps) {
+export default function WordListView({ graph, filter, fills }: WordListViewProps) {
+  const f = fills ?? GROUP_FILL
   const weighted = useMemo(
     () => computeNodeWeights(graph, filter),
     [graph, filter]
@@ -65,49 +68,48 @@ export default function WordListView({ graph, filter }: WordListViewProps) {
             onClick={() => handleClick(node)}
             className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-3 transition-all group ${
               isSelected
-                ? "ring-2 ring-neutral-900 bg-white shadow-sm dark:ring-neutral-100 dark:bg-neutral-800"
+                ? "ring-2 ring-accent-purple bg-surface shadow-lg shadow-accent-purple/5"
                 : isNeighbor
-                ? "bg-neutral-50 dark:bg-neutral-800/50"
-                : "hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+                ? "bg-surface-hover"
+                : "hover:bg-surface-hover"
             }`}
           >
             <span
-              className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                GROUP_COLORS[node.group] ?? GROUP_COLORS.unknown
-              }`}
+              className="text-xs px-1.5 py-0.5 rounded font-medium"
+              style={{ backgroundColor: f[node.group] ? f[node.group] + '20' : '#6b6b8020', color: f[node.group] ?? '#6b6b80' }}
             >
-              {node.group}
+              {GROUP_LABELS[node.group] ?? node.group}
             </span>
 
             <span
               className={`flex-1 text-sm truncate ${
-                isSelected ? "font-semibold text-neutral-900 dark:text-neutral-100" : "text-neutral-700 dark:text-neutral-300"
+                isSelected ? "font-semibold text-foreground" : "text-foreground/70"
               }`}
             >
               {node.label}
             </span>
 
-            <div className="w-24 h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+            <div className="w-24 h-1.5 bg-border-bright rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${
                   isSelected
-                    ? "bg-neutral-900"
+                    ? "bg-accent-purple"
                     : isNeighbor
-                    ? "bg-neutral-500"
-                    : "bg-neutral-300"
+                    ? "bg-accent-teal"
+                    : "bg-border-bright"
                 }`}
                 style={{ width: `${barWidth}%` }}
               />
             </div>
 
-            <span className="text-xs text-neutral-400 dark:text-neutral-500 w-6 text-right tabular-nums">
+            <span className="text-xs text-muted w-6 text-right tabular-nums">
               {node.weight}
             </span>
           </button>
         )
       })}
       {weighted.length === 0 && (
-        <p className="text-sm text-neutral-400 py-8 text-center">
+        <p className="text-sm text-muted py-8 text-center">
           No nodes match the current filter.
         </p>
       )}
