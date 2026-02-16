@@ -227,6 +227,24 @@ function RemotePageInner({
     setStatus("Exporting...")
   }
 
+  const addToG = () => {
+    if (!session || !graph) {
+      setStatus("No session or graph data")
+      return
+    }
+
+    const nodeLabel = selectedNodeId ? getNodeLabel(graph, selectedNodeId) : "nothing"
+    const pathLabels = session.path.map(id => getNodeLabel(graph, id)).join(" → ")
+    const pathText = pathLabels || "empty path"
+
+    const text = `I want to tell you something about ${nodeLabel}, on ${pathText}`
+    const encodedText = encodeURIComponent(text)
+    const telegramUrl = `https://t.me/ethboulder_bot?text=${encodedText}`
+
+    window.open(telegramUrl, "_blank")
+    setStatus("Opening Telegram...")
+  }
+
   const currentViewLabel =
     VIEW_MODES.find((v) => v.value === session?.viewMode)?.label ?? "—"
 
@@ -359,17 +377,25 @@ function RemotePageInner({
           💾 Save Path
         </button>
 
-        {/* Export Path - spans full width */}
+        {/* Export Path */}
         <button
           onClick={exportPath}
           disabled={!lastPathId}
-          className={`col-span-2 rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
+          className={`rounded-lg p-4 text-sm font-medium transition-colors shadow-sm border ${
             lastPathId
               ? "bg-surface border-border text-foreground/70 hover:bg-surface-hover hover:border-border-bright active:bg-surface-hover"
               : "bg-surface/50 border-border/50 text-muted/40 cursor-not-allowed"
           }`}
         >
           📤 Export Path
+        </button>
+
+        {/* Add to Graph (Telegram) */}
+        <button
+          onClick={addToG}
+          className="rounded-lg p-4 text-sm font-medium bg-accent-teal/20 border border-accent-teal/40 text-accent-teal active:bg-accent-teal/30 transition-colors shadow-sm"
+        >
+          💬 Add to Graph
         </button>
       </div>
 
